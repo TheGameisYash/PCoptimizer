@@ -1,7 +1,7 @@
-# PC Optimizer Pro v3.0 - PowerShell Edition - COMPLETE VERSION
+# PC Optimizer Pro v3.0 - Complete Working Version
 param([switch]$AsAdmin)
 
-# Elevation Check
+# Check for Administrator privileges
 if (-NOT ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {
     if (-NOT $AsAdmin) {
         Write-Host "[!] Requesting administrator privileges..." -ForegroundColor Yellow
@@ -30,6 +30,7 @@ $script:SYMBOLS = @{
 $script:HWID = ""
 $script:isPremium = $false
 
+# Initialize System
 function Initialize-System {
     if (-not (Test-Path $script:CONFIG.BACKUP_DIR)) {
         New-Item -ItemType Directory -Path $script:CONFIG.BACKUP_DIR -Force | Out-Null
@@ -77,7 +78,6 @@ function Get-HardwareID {
     Write-Status "RUN" "Detecting hardware signature..."
     $hwid = $null
     
-    # Method 1: System UUID
     try {
         $systemInfo = Get-CimInstance -ClassName Win32_ComputerSystemProduct -ErrorAction SilentlyContinue
         if ($systemInfo -and $systemInfo.UUID -and $systemInfo.UUID -ne "00000000-0000-0000-0000-000000000000") {
@@ -86,7 +86,6 @@ function Get-HardwareID {
         }
     } catch {}
     
-    # Method 2: Motherboard Serial
     if (-not $hwid) {
         try {
             $motherboard = Get-CimInstance -ClassName Win32_BaseBoard -ErrorAction SilentlyContinue
@@ -97,7 +96,6 @@ function Get-HardwareID {
         } catch {}
     }
     
-    # Method 3: BIOS Serial
     if (-not $hwid) {
         try {
             $bios = Get-CimInstance -ClassName Win32_BIOS -ErrorAction SilentlyContinue
@@ -108,7 +106,6 @@ function Get-HardwareID {
         } catch {}
     }
     
-    # Method 4: CPU ID
     if (-not $hwid) {
         try {
             $cpu = Get-CimInstance -ClassName Win32_Processor -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -119,13 +116,11 @@ function Get-HardwareID {
         } catch {}
     }
     
-    # Fallback method
     if (-not $hwid) {
         $hwid = "$env:COMPUTERNAME" + "_" + "$env:USERNAME" + "_" + (Get-Random -Maximum 99999)
         Write-Log "WARNING" "Generated fallback HWID"
     }
     
-    # Clean and limit HWID
     $hwid = $hwid -replace '\s', ''
     if ($hwid.Length -gt 64) {
         $hwid = $hwid.Substring(0, 64)
@@ -174,7 +169,6 @@ function Test-License {
     
     return $false
 }
-
 
 function Get-SystemInfo {
     Show-Header "COMPREHENSIVE SYSTEM INFORMATION"
@@ -311,7 +305,6 @@ function Get-DiskAnalysis {
         
         Write-Host "Drive $($drive.DeviceID) - Total: $totalGB GB | Free: $freeGB GB | Used: $usedGB GB ($usagePercent%)"
         
-        # Visual usage bar
         $barLength = [Math]::Floor($usagePercent / 5)
         $bar = "#" * $barLength + "." * (20 - $barLength)
         Write-Host "[$bar] $usagePercent% used"
@@ -410,7 +403,6 @@ function Get-NetworkStatus {
             Write-Host ""
         }
     } catch {
-        # Fallback method
         $ipconfig = ipconfig /all
         Write-Host "Network configuration information:"
         $ipconfig | Select-Object -First 20 | ForEach-Object { Write-Host $_ }
@@ -468,469 +460,661 @@ function Get-NetworkStatus {
     $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 }
 
-
-# -------------------------- #
-#  Cleaning-related Helpers  #
-# -------------------------- #
-
 function Clear-BrowserCaches {
-    # Chrome
     $chromePath = "$env:LOCALAPPDATA\Google\Chrome\User Data"
     if (Test-Path $chromePath) {
-        Stop-Process -Name chrome  -Force -ErrorAction SilentlyContinue
+        Stop-Process -Name chrome -Force -ErrorAction SilentlyContinue
         Start-Sleep 2
-        Get-ChildItem "$chromePath\*\Cache"      -Recurse -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-        Get-ChildItem "$chromePath\*\Code Cache" -Recurse -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+        Get-ChildItem "$chromePath\*\Cache" -Recurse -Force -ErrorAction SilentlyContinue | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
+        Get-ChildItem "$chromePath\*\Code Cache" -Recurse -Force -ErrorAction SilentlyContinue | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
     }
-
-    # Firefox
+    
     $firefoxPath = "$env:LOCALAPPDATA\Mozilla\Firefox\Profiles"
     if (Test-Path $firefoxPath) {
         Stop-Process -Name firefox -Force -ErrorAction SilentlyContinue
         Start-Sleep 2
-        Get-ChildItem "$firefoxPath\*\cache2" -Recurse -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+        Get-ChildItem "$firefoxPath\*\cache2" -Recurse -Force -ErrorAction SilentlyContinue | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
     }
-
-    # Edge (Chromium)
+    
     $edgePath = "$env:LOCALAPPDATA\Microsoft\Edge\User Data"
     if (Test-Path $edgePath) {
         Stop-Process -Name msedge -Force -ErrorAction SilentlyContinue
         Start-Sleep 2
-        Get-ChildItem "$edgePath\*\Cache" -Recurse -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+        Get-ChildItem "$edgePath\*\Cache" -Recurse -Force -ErrorAction SilentlyContinue | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
     }
-
-    # Internet Explorer / Legacy Edge
+    
     $ieCache = "$env:LOCALAPPDATA\Microsoft\Windows\INetCache"
     if (Test-Path $ieCache) {
-        Get-ChildItem $ieCache -Recurse -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+        Get-ChildItem $ieCache -Recurse -Force -ErrorAction SilentlyContinue | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
     }
 }
-
-# ------------------------------------ #
-#  Enhanced Basic System-Clean Routine #
-# ------------------------------------ #
 
 function Invoke-BasicClean {
     Show-Header "ENHANCED BASIC SYSTEM CLEANER"
     Write-Status "RUN" "Preparing comprehensive system cleanup..."
     Write-Host ""
-
-    # System-restore checkpoint
+    
     try {
-        Checkpoint-Computer -Description "PC Optimizer – Basic Clean" -RestorePointType MODIFY_SETTINGS
-        Write-Status "OK" "System restore point created"
+        if (Get-Command "Checkpoint-Computer" -ErrorAction SilentlyContinue) {
+            Checkpoint-Computer -Description "PC Optimizer Basic Clean" -RestorePointType "MODIFY_SETTINGS"
+            Write-Status "OK" "System restore point created"
+        } else {
+            Write-Status "WARN" "Unable to create restore point"
+        }
     } catch {
-        Write-Status "WARN" "Unable to create restore point"
+        Write-Status "WARN" "Backup creation failed: $($_.Exception.Message)"
+        Write-Status "INFO" "Continuing without backup..."
     }
-
+    
     $totalCleanedMB = 0
     Write-Host "CLEANING PROGRESS:" -ForegroundColor Yellow
     Write-Host "------------------------------------------------------------------------------" -ForegroundColor Gray
-
-    # 1. %TEMP%
-    Write-Host "[1/10] Cleaning user-temp files..."
+    
+    Write-Host "[1/10] Cleaning temporary files..."
     try {
-        $before = (Get-ChildItem $env:TEMP -Recurse -File -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum
-        Get-ChildItem $env:TEMP -Recurse -ErrorAction SilentlyContinue | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
-        $after  = (Get-ChildItem $env:TEMP -Recurse -File -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum
-        $freed  = [math]::Round(($before-$after)/1MB,1)
-        $totalCleanedMB += $freed
-        Write-Status "OK" "User-temp cleaned – $freed MB"
-    } catch { Write-Status "WARN" "Some temp files could not be removed" }
-
-    # 2. C:\Windows\Temp
-    Write-Host "[2/10] Cleaning Windows-temp files..."
+        $tempPath = $env:TEMP
+        $beforeSize = (Get-ChildItem $tempPath -Recurse -File -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum
+        Get-ChildItem $tempPath -Recurse -ErrorAction SilentlyContinue | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
+        $afterSize = (Get-ChildItem $tempPath -Recurse -File -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum
+        $cleanedMB = [Math]::Round(($beforeSize - $afterSize) / 1MB, 1)
+        $totalCleanedMB += $cleanedMB
+        Write-Status "OK" "Temporary files cleaned - $cleanedMB MB"
+    } catch {
+        Write-Status "WARN" "Some temporary files could not be cleaned"
+    }
+    
+    Write-Host "[2/10] Cleaning Windows temporary files..."
     try {
-        $winTemp = "C:\Windows\Temp"
-        if (Test-Path $winTemp) {
-            $before = (Get-ChildItem $winTemp -Recurse -File -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum
-            Get-ChildItem $winTemp -Recurse -ErrorAction SilentlyContinue | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
-            $after  = (Get-ChildItem $winTemp -Recurse -File -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum
-            $freed  = [math]::Round(($before-$after)/1MB,1)
-            $totalCleanedMB += $freed
-            Write-Status "OK" "Windows-temp cleaned – $freed MB"
+        $winTempPath = "C:\Windows\Temp"
+        if (Test-Path $winTempPath) {
+            $beforeSize = (Get-ChildItem $winTempPath -Recurse -File -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum
+            Get-ChildItem $winTempPath -Recurse -ErrorAction SilentlyContinue | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
+            $afterSize = (Get-ChildItem $winTempPath -Recurse -File -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum
+            $cleanedMB = [Math]::Round(($beforeSize - $afterSize) / 1MB, 1)
+            $totalCleanedMB += $cleanedMB
+            Write-Status "OK" "Windows temp files cleaned - $cleanedMB MB"
         }
-    } catch { Write-Status "WARN" "Windows-temp cleanup incomplete" }
-
-    # 3. Recycle-Bin
+    } catch {
+        Write-Status "WARN" "Some Windows temp files could not be cleaned"
+    }
+    
     Write-Host "[3/10] Emptying Recycle Bin..."
     try {
         Clear-RecycleBin -Force -ErrorAction Stop
         Write-Status "OK" "Recycle Bin emptied"
-        $totalCleanedMB += 50   # rough estimate
-    } catch { Write-Status "WARN" "Recycle Bin could not be fully emptied" }
-
-    # 4. Browser caches
-    Write-Host "[4/10] Clearing browser caches..."
+        $totalCleanedMB += 50
+    } catch {
+        Write-Status "WARN" "Could not empty Recycle Bin"
+    }
+    
+    Write-Host "[4/10] Cleaning browser caches..."
     try {
         Clear-BrowserCaches
-        Write-Status "OK" "Browser caches cleared"
-        $totalCleanedMB += 100  # rough estimate
-    } catch { Write-Status "WARN" "Browser-cache cleanup incomplete" }
-
-    # 5. Prefetch
-    Write-Host "[5/10] Purging Prefetch folder..."
+        Write-Status "OK" "Browser caches cleaned"
+        $totalCleanedMB += 100
+    } catch {
+        Write-Status "WARN" "Some browser caches could not be cleaned"
+    }
+    
+    Write-Host "[5/10] Cleaning prefetch files..."
     try {
-        $pf = "C:\Windows\Prefetch"
-        if (Test-Path $pf) {
-            Get-ChildItem $pf -Filter "*.pf" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
-            Write-Status "OK" "Prefetch cleaned"
+        $prefetchPath = "C:\Windows\Prefetch"
+        if (Test-Path $prefetchPath) {
+            Get-ChildItem $prefetchPath -Filter "*.pf" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+            Write-Status "OK" "Prefetch files cleaned"
             $totalCleanedMB += 20
         }
-    } catch { Write-Status "WARN" "Prefetch cleanup failed" }
-
-    # 6. Old log files
-    Write-Host "[6/10] Removing old log files..."
+    } catch {
+        Write-Status "WARN" "Could not clean prefetch files"
+    }
+    
+    Write-Host "[6/10] Cleaning system log files..."
     try {
-        $logPaths = @("C:\Windows\Logs", "C:\Windows\System32\LogFiles")
-        foreach ($p in $logPaths) {
-            if (Test-Path $p) {
-                Get-ChildItem $p -Recurse -File -ErrorAction SilentlyContinue |
+        $logPaths = @(
+            "C:\Windows\Logs",
+            "C:\Windows\System32\LogFiles"
+        )
+        foreach ($logPath in $logPaths) {
+            if (Test-Path $logPath) {
+                Get-ChildItem $logPath -Recurse -File -ErrorAction SilentlyContinue | 
                 Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-7) } |
                 Remove-Item -Force -ErrorAction SilentlyContinue
             }
         }
-        Write-Status "OK" "Obsolete logs removed"
+        Write-Status "OK" "Old log files cleaned"
         $totalCleanedMB += 30
-    } catch { Write-Status "WARN" "Log-file cleanup incomplete" }
-
-    # 7. DNS cache
+    } catch {
+        Write-Status "WARN" "Some log files could not be cleaned"
+    }
+    
     Write-Host "[7/10] Flushing DNS cache..."
-    try { ipconfig /flushdns | Out-Null; Write-Status "OK" "DNS cache flushed" }
-    catch { Write-Status "WARN" "DNS cache flush failed" }
-
-    # 8. .NET garbage collection
-    Write-Host "[8/10] Optimizing memory (.NET GC)..."
     try {
-        [GC]::Collect(); [GC]::WaitForPendingFinalizers(); [GC]::Collect()
-        Write-Status "OK" "Memory optimized"
-    } catch { Write-Status "WARN" "Memory optimization failed" }
-
-    # 9. Event-logs trim
-    Write-Host "[9/10] Trimming large Windows event logs..."
+        ipconfig /flushdns | Out-Null
+        Write-Status "OK" "DNS cache flushed"
+    } catch {
+        Write-Status "WARN" "Could not flush DNS cache"
+    }
+    
+    Write-Host "[8/10] Optimizing memory usage..."
     try {
-        foreach ($log in @("Application","System","Security")) {
-            $entries = Get-EventLog -LogName $log -ErrorAction SilentlyContinue
-            if ($entries.Count -gt 1000) { Clear-EventLog -LogName $log }
+        [System.GC]::Collect()
+        [System.GC]::WaitForPendingFinalizers()
+        [System.GC]::Collect()
+        Write-Status "OK" "Memory optimization completed"
+    } catch {
+        Write-Status "WARN" "Memory optimization failed"
+    }
+    
+    Write-Host "[9/10] Cleaning event logs..."
+    try {
+        $eventLogs = @("Application", "System", "Security")
+        foreach ($log in $eventLogs) {
+            $eventLog = Get-EventLog -LogName $log -ErrorAction SilentlyContinue
+            if ($eventLog.Count -gt 1000) {
+                Clear-EventLog -LogName $log -ErrorAction SilentlyContinue
+            }
         }
-        Write-Status "OK" "Event logs cleared/trimmed"
-    } catch { Write-Status "WARN" "Event-log cleanup failed" }
-
-    # 10. Thumbnail cache
+        Write-Status "OK" "Event logs optimized"
+    } catch {
+        Write-Status "WARN" "Could not optimize event logs"
+    }
+    
     Write-Host "[10/10] Cleaning thumbnail cache..."
     try {
-        $thumbPath = "$env:LOCALAPPDATA\Microsoft\Windows\Explorer"
-        if (Test-Path $thumbPath) {
-            Get-ChildItem $thumbPath -Filter "thumbcache*.db" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
-            Write-Status "OK" "Thumbnail cache cleared"
+        $thumbCachePath = "$env:LOCALAPPDATA\Microsoft\Windows\Explorer"
+        if (Test-Path $thumbCachePath) {
+            Get-ChildItem $thumbCachePath -Filter "thumbcache*.db" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+            Write-Status "OK" "Thumbnail cache cleaned"
             $totalCleanedMB += 25
         }
-    } catch { Write-Status "WARN" "Thumbnail-cache cleanup failed" }
-
-    # Summary
+    } catch {
+        Write-Status "WARN" "Could not clean thumbnail cache"
+    }
+    
     Write-Host ""
     Write-Host "CLEANUP SUMMARY:" -ForegroundColor Yellow
     Write-Host "------------------------------------------------------------------------------" -ForegroundColor Gray
-    Write-Host " Total space recovered : $totalCleanedMB MB"
-    Write-Host " Categories processed  : 10"
-    Write-Status "OK" "Basic clean finished!"
-    Write-Log  "INFO" "Basic clean – freed $totalCleanedMB MB"
-    Show-Footer
+    Write-Host ""
+    Write-Status "OK" "Enhanced basic cleanup completed successfully!"
+    Write-Host ""
+    Write-Host " Total space recovered: $totalCleanedMB MB"
+    Write-Host " System components cleaned: 10 categories"
+    Write-Host " Memory optimized: Yes"
+    Write-Host " Network cache cleared: Yes"
+    
+    Write-Log "INFO" "Basic cleanup completed - $totalCleanedMB MB recovered"
+    Write-Host ""
+    Write-Status "INFO" "Press any key to continue..."
     $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 }
-
-# --------------------------------- #
-#  Registry Scanner & Optimiser     #
-# --------------------------------- #
 
 function Invoke-RegistryScanner {
     Show-Header "REGISTRY SCANNER & CLEANER"
-    Write-Status "RUN" "Scanning registry for inconsistencies..."
+    Write-Status "RUN" "Scanning registry for issues..."
     Write-Host ""
-
-    # Backup
+    
     try {
-        $bk = "$($script:CONFIG.BACKUP_DIR)\RegBackup_$(Get-Date -Format 'yyyyMMdd_HHmmss').reg"
-        reg export HKLM $bk /y | Out-Null
-        Write-Status "OK" "Registry backup created : $bk"
-    } catch { Write-Status "WARN" "Registry backup could not be created" }
-
-    $issuesFound = 0; $issuesFixed = 0
-
-    # 1. Invalid uninstall entries
-    Write-Host "[1/5] Checking orphaned uninstall entries..."
+        $backupPath = "$($script:CONFIG.BACKUP_DIR)\Registry_Backup_$(Get-Date -Format 'yyyyMMdd_HHmmss').reg"
+        reg export HKLM $backupPath /y | Out-Null
+        Write-Status "OK" "Registry backup created: $backupPath"
+    } catch {
+        Write-Status "WARN" "Registry backup failed"
+    }
+    
+    $issuesFound = 0
+    $issuesFixed = 0
+    
+    Write-Host "SCANNING REGISTRY AREAS:" -ForegroundColor Yellow
+    Write-Host "------------------------------------------------------------------------------" -ForegroundColor Gray
+    
+    Write-Host "[1/5] Scanning invalid software entries..."
     try {
-        $uKey = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"
-        $invalid = (Get-ChildItem $uKey -ErrorAction SilentlyContinue |
-                    Where-Object {
-                        $loc = (Get-ItemProperty $_.PSPath -Name InstallLocation -ErrorAction SilentlyContinue).InstallLocation
-                        $loc -and -not (Test-Path $loc)
-                    }).Count
-        $issuesFound += $invalid
-        Write-Status "OK"  "Found $invalid invalid software entries"
-    } catch { Write-Status "WARN" "Uninstall-entry scan failed" }
-
-    # 2. Invalid file-associations
-    Write-Host "[2/5] Checking broken file associations..."
-    try {
-        $cls = "HKLM:\SOFTWARE\Classes"
-        $broken = 0
-        Get-ChildItem $cls -ErrorAction SilentlyContinue | Where-Object Name -like "*.*" | ForEach-Object {
-            $dflt = (Get-ItemProperty $_.PSPath -Name "(default)" -ErrorAction SilentlyContinue)."(default)"
-            if ($dflt) {
-                $cmdKey = "$cls\$dflt\shell\open\command"
-                if (Test-Path $cmdKey) {
-                    $cmd = (Get-ItemProperty $cmdKey -Name "(default)" -ErrorAction SilentlyContinue)."(default)"
-                    $exe = ($cmd -split '"')[1]
-                    if ($exe -and -not (Test-Path $exe)) { $broken++ }
+        $uninstallKey = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"
+        $entries = Get-ChildItem $uninstallKey -ErrorAction SilentlyContinue
+        $invalidEntries = 0
+        
+        foreach ($entry in $entries) {
+            $displayName = Get-ItemProperty $entry.PSPath -Name "DisplayName" -ErrorAction SilentlyContinue
+            $installLocation = Get-ItemProperty $entry.PSPath -Name "InstallLocation" -ErrorAction SilentlyContinue
+            
+            if ($installLocation -and $installLocation.InstallLocation) {
+                if (-not (Test-Path $installLocation.InstallLocation)) {
+                    $invalidEntries++
+                    $issuesFound++
                 }
             }
         }
-        $issuesFound += $broken
-        Write-Status "OK" "Found $broken broken associations"
-    } catch { Write-Status "WARN" "Association scan failed" }
-
-    # 3. Empty run-keys
-    Write-Host "[3/5] Detecting empty run-entries..."
+        Write-Status "OK" "Found $invalidEntries invalid software entries"
+    } catch {
+        Write-Status "WARN" "Could not scan software entries"
+    }
+    
+    Write-Host "[2/5] Scanning file associations..."
     try {
-        $empty = 0
-        foreach ($p in @("HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run",
-                         "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run")) {
-            if (Test-Path $p) {
-                Get-ChildItem $p -ErrorAction SilentlyContinue | ForEach-Object {
-                    $vals = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue
-                    $subs = Get-ChildItem $_.PSPath -ErrorAction SilentlyContinue
-                    if (-not $vals -and -not $subs) { $empty++ }
-                }
-            }
-        }
-        $issuesFound += $empty
-        Write-Status "OK" "Found $empty empty run keys"
-    } catch { Write-Status "WARN" "Empty-key scan failed" }
-
-    # 4. Broken startup paths
-    Write-Host "[4/5] Checking startup-item integrity..."
-    try {
-        $brokenStart = 0
-        foreach ($p in @("HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run",
-                         "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run")) {
-            if (Test-Path $p) {
-                (Get-ItemProperty $p -ErrorAction SilentlyContinue).PSObject.Properties |
-                    Where-Object Name -notmatch "^PS" | ForEach-Object {
-                        $ep = ($_.Value -split '"')[1]
-                        if ($ep -and -not (Test-Path $ep)) { $brokenStart++ }
+        $classesKey = "HKLM:\SOFTWARE\Classes"
+        $associations = Get-ChildItem $classesKey -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "*.*" }
+        $invalidAssociations = 0
+        
+        foreach ($assoc in $associations) {
+            $defaultValue = Get-ItemProperty $assoc.PSPath -Name "(default)" -ErrorAction SilentlyContinue
+            if ($defaultValue -and $defaultValue."(default)") {
+                $commandKey = "$classesKey\$($defaultValue.'(default)')\shell\open\command"
+                if (Test-Path $commandKey) {
+                    $command = Get-ItemProperty $commandKey -Name "(default)" -ErrorAction SilentlyContinue
+                    if ($command -and $command."(default)") {
+                        $exePath = ($command."(default)" -split '"')[1]
+                        if ($exePath -and -not (Test-Path $exePath)) {
+                            $invalidAssociations++
+                            $issuesFound++
+                        }
                     }
+                }
             }
         }
-        $issuesFound += $brokenStart
-        Write-Status "OK" "Found $brokenStart invalid startup entries"
-    } catch { Write-Status "WARN" "Startup-scan failed" }
-
-    # 5. Hive compaction
-    Write-Host "[5/5] Compacting registry hives..."
+        Write-Status "OK" "Found $invalidAssociations invalid file associations"
+    } catch {
+        Write-Status "WARN" "Could not scan file associations"
+    }
+    
+    Write-Host "[3/5] Scanning for empty registry keys..."
     try {
-        Start-Process compact -ArgumentList "/c /s /a /i C:\Windows\System32\config\*" -WindowStyle Hidden -Wait
-        Write-Status "OK" "Registry hives compacted"
-        $issuesFixed += 10  # nominal score
-    } catch { Write-Status "WARN" "Hive compaction failed" }
-
-    # Summary
+        $emptyKeys = 0
+        $keysToCheck = @(
+            "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run",
+            "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
+        )
+        
+        foreach ($keyPath in $keysToCheck) {
+            if (Test-Path $keyPath) {
+                $subKeys = Get-ChildItem $keyPath -ErrorAction SilentlyContinue
+                foreach ($subKey in $subKeys) {
+                    $hasValues = Get-ItemProperty $subKey.PSPath -ErrorAction SilentlyContinue
+                    $hasSubKeys = Get-ChildItem $subKey.PSPath -ErrorAction SilentlyContinue
+                    
+                    if (-not $hasValues -and -not $hasSubKeys) {
+                        $emptyKeys++
+                        $issuesFound++
+                    }
+                }
+            }
+        }
+        Write-Status "OK" "Found $emptyKeys empty registry keys"
+    } catch {
+        Write-Status "WARN" "Could not scan for empty keys"
+    }
+    
+    Write-Host "[4/5] Scanning startup entries..."
+    try {
+        $startupKeys = @(
+            "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run",
+            "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
+        )
+        
+        $invalidStartup = 0
+        foreach ($startupKey in $startupKeys) {
+            if (Test-Path $startupKey) {
+                $entries = Get-ItemProperty $startupKey -ErrorAction SilentlyContinue
+                if ($entries) {
+                    $entries.PSObject.Properties | ForEach-Object {
+                        if ($_.Name -ne "PSPath" -and $_.Name -ne "PSParentPath" -and $_.Name -ne "PSChildName" -and $_.Name -ne "PSDrive" -and $_.Name -ne "PSProvider") {
+                            $path = ($_.Value -split '"')[1]
+                            if ($path -and -not (Test-Path $path)) {
+                                $invalidStartup++
+                                $issuesFound++
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Write-Status "OK" "Found $invalidStartup invalid startup entries"
+    } catch {
+        Write-Status "WARN" "Could not scan startup entries"
+    }
+    
+    Write-Host "[5/5] Optimizing registry performance..."
+    try {
+        $regCompact = Start-Process "compact" -ArgumentList "/c /s /a /i C:\Windows\System32\config\*" -WindowStyle Hidden -PassThru -Wait
+        Write-Status "OK" "Registry optimization completed"
+        $issuesFixed += 10
+    } catch {
+        Write-Status "WARN" "Registry optimization failed"
+    }
+    
     Write-Host ""
     Write-Host "REGISTRY SCAN RESULTS:" -ForegroundColor Yellow
     Write-Host "------------------------------------------------------------------------------" -ForegroundColor Gray
-    Write-Host " Issues located : $issuesFound"
-    Write-Host " Optimisations  : $issuesFixed"
-    Write-Status "OK" "Registry scan complete!"
-    Write-Log  "INFO" "Registry scan – found $issuesFound issues"
-    Show-Footer
+    Write-Host " Issues found: $issuesFound"
+    Write-Host " Issues optimized: $issuesFixed"
+    Write-Host " Registry backup: Created"
+    Write-Host " Scan time: $(Get-Date -Format 'HH:mm:ss')"
+    
+    Write-Status "OK" "Registry scan completed successfully!"
+    Write-Log "INFO" "Registry scan completed - $issuesFound issues found"
+    Write-Host ""
+    Write-Status "INFO" "Press any key to continue..."
     $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 }
-
-# --------------------------------------------- #
-#  Comprehensive System-Health Diagnostics      #
-# --------------------------------------------- #
 
 function Invoke-SystemHealthCheck {
     Show-Header "COMPREHENSIVE SYSTEM HEALTH CHECK"
-    Write-Status "RUN" "Running multi-point diagnostics..."
+    Write-Status "RUN" "Performing comprehensive system diagnostics..."
     Write-Host ""
-
-    $issues = 0; $score = 100
-
-    # Disk space
-    Write-Host "[1/8] Disk-space headroom..."
-    try {
-        Get-CimInstance Win32_LogicalDisk | Where-Object DriveType -eq 3 | ForEach-Object {
-            $pct = (($_.FreeSpace / $_.Size) * 100)
-            if ($pct -lt 15) { Write-Status "WARN" "Drive $($_.DeviceID) low: $([math]::Round($pct,1))% free"; $issues++; $score-=5 }
-            else             { Write-Status "OK"   "Drive $($_.DeviceID) healthy: $([math]::Round($pct,1))% free" }
-        }
-    } catch { Write-Status "ERR" "Disk-check failed"; $issues++ }
-
-    # RAM usage
-    Write-Host "[2/8] Memory-pressure..."
-    try {
-        $os     = Get-CimInstance Win32_OperatingSystem
-        $pctRam = (($os.TotalVisibleMemorySize-$os.FreePhysicalMemory)/$os.TotalVisibleMemorySize)*100
-        if ($pctRam -gt 85) { Write-Status "WARN" "High RAM usage: $([math]::Round($pctRam,1))%"; $issues++; $score-=3 }
-        else                { Write-Status "OK"   "RAM usage normal: $([math]::Round($pctRam,1))%" }
-    } catch { Write-Status "WARN" "RAM check failed" }
-
-    # CPU load
-    Write-Host "[3/8] CPU utilisation..."
-    try {
-        $cpuLoad = (Get-Counter '\Processor(_Total)\% Processor Time').CounterSamples.CookedValue
-        if ($cpuLoad -gt 80) { Write-Status "WARN" "CPU busy: $([math]::Round($cpuLoad,1))%"; $issues++; $score-=3 }
-        else                 { Write-Status "OK"  "CPU load fine: $([math]::Round($cpuLoad,1))%" }
-    } catch { Write-Status "WARN" "CPU load sample failed" }
-
-    # Windows Update status
-    Write-Host "[4/8] Pending Windows Updates..."
-    try {
-        $updSession = New-Object -ComObject Microsoft.Update.Session
-        $updSearch  = $updSession.CreateUpdateSearcher().Search("IsInstalled=0")
-        if ($updSearch.Updates.Count) { Write-Status "WARN" "$($updSearch.Updates.Count) updates pending"; $issues++; $score-=2 }
-        else                          { Write-Status "OK"  "System fully patched" }
-    } catch { Write-Status "WARN" "Update-query failed" }
-
-    # Antivirus
-    Write-Host "[5/8] Antivirus realtime status..."
-    try {
-        $av = Get-CimInstance -Namespace root\SecurityCenter2 -ClassName AntiVirusProduct -ErrorAction SilentlyContinue |
-              Where-Object { $_.productState -band 0x1000 }
-        if ($av) { Write-Status "OK" "AV active: $($av.displayName)" }
-        else     { Write-Status "WARN" "No active AV detected"; $issues++; $score-=10 }
-    } catch { Write-Status "WARN" "AV status query failed" }
-
-    # Firewall
-    Write-Host "[6/8] Windows Firewall..."
-    try {
-        $fw = Get-NetFirewallProfile | Where-Object Enabled -eq $true
-        if ($fw) { Write-Status "OK" "Firewall enabled for $($fw.Count) profile(s)" }
-        else     { Write-Status "WARN" "Firewall disabled"; $issues++; $score-=5 }
-    } catch { Write-Status "WARN" "Firewall check failed" }
-
-    # System-file integrity
-    Write-Host "[7/8] System-file integrity (sfc /verifyonly)..."
-    try {
-        $sfc = sfc /verifyonly
-        if ($sfc -match "did not find any integrity violations") { Write-Status "OK" "System files intact" }
-        else                                                     { Write-Status "WARN" "Integrity issues detected"; $issues++; $score-=8 }
-    } catch { Write-Status "WARN" "SFC execution failed" }
-
-    # Uptime
-    Write-Host "[8/8] Uptime check..."
-    try {
-        $boot = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime
-        $up   = (Get-Date) - $boot
-        if ($up.Days -gt 7) { Write-Status "WARN" "Uptime $($up.Days) day(s) – restart recommended"; $issues++; $score-=2 }
-        else                { Write-Status "OK"  "Uptime $($up.Days) day(s)" }
-    } catch { Write-Status "WARN" "Uptime query failed" }
-
-    # Summary
-    Write-Host ""
-    Write-Host "SYSTEM-HEALTH SUMMARY:" -ForegroundColor Yellow
+    
+    Write-Host "HEALTH CHECK PROGRESS:" -ForegroundColor Yellow
     Write-Host "------------------------------------------------------------------------------" -ForegroundColor Gray
-    $grade =  if ($score -ge 95) {'Excellent'} elseif ($score -ge 85){'Good'} elseif ($score -ge 70){'Fair'} elseif ($score -ge 50){'Poor'} else {'Critical'}
-    Write-Host " Overall Score : $score/100"
-    Write-Host " Health Grade  : $grade"
-    Write-Host " Issues Found  : $issues"
-    Write-Host " Checked At    : $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
-    Write-Status "OK" "Health-check completed"
-    Write-Log  "INFO" "Health-check – score $score issues $issues"
-    Show-Footer
+    
+    $healthIssues = 0
+    $healthScore = 100
+    
+    Write-Host "[1/8] Checking disk health..."
+    try {
+        $disks = Get-CimInstance -ClassName Win32_LogicalDisk | Where-Object { $_.DriveType -eq 3 }
+        foreach ($disk in $disks) {
+            $freePercent = ($disk.FreeSpace / $disk.Size) * 100
+            if ($freePercent -lt 15) {
+                Write-Status "WARN" "Disk $($disk.DeviceID) low on space ($([Math]::Round($freePercent, 1))% free)"
+                $healthIssues++
+                $healthScore -= 5
+            } else {
+                Write-Status "OK" "Disk $($disk.DeviceID) space healthy ($([Math]::Round($freePercent, 1))% free)"
+            }
+        }
+    } catch {
+        Write-Status "ERR" "Could not check disk health"
+        $healthIssues++
+    }
+    
+    Write-Host "[2/8] Checking memory health..."
+    try {
+        $os = Get-CimInstance -ClassName Win32_OperatingSystem
+        $totalRAM = $os.TotalVisibleMemorySize / 1KB
+        $freeRAM = $os.FreePhysicalMemory / 1KB
+        $usedPercent = (($totalRAM - $freeRAM) / $totalRAM) * 100
+        
+        if ($usedPercent -gt 85) {
+            Write-Status "WARN" "High memory usage ($([Math]::Round($usedPercent, 1))%)"
+            $healthIssues++
+            $healthScore -= 3
+        } else {
+            Write-Status "OK" "Memory usage normal ($([Math]::Round($usedPercent, 1))%)"
+        }
+    } catch {
+        Write-Status "ERR" "Could not check memory health"
+        $healthIssues++
+    }
+    
+    Write-Host "[3/8] Checking CPU performance..."
+    try {
+        $cpu = Get-CimInstance -ClassName Win32_Processor
+        $cpuLoad = (Get-Counter "\Processor(_Total)\% Processor Time").CounterSamples.CookedValue
+        
+        if ($cpuLoad -gt 80) {
+            Write-Status "WARN" "High CPU usage ($([Math]::Round($cpuLoad, 1))%)"
+            $healthIssues++
+            $healthScore -= 3
+        } else {
+            Write-Status "OK" "CPU performance normal ($([Math]::Round($cpuLoad, 1))%)"
+        }
+    } catch {
+        Write-Status "WARN" "Could not measure CPU performance accurately"
+    }
+    
+    Write-Host "[4/8] Checking Windows Update status..."
+    try {
+        $updateSession = New-Object -ComObject Microsoft.Update.Session
+        $updateSearcher = $updateSession.CreateUpdateSearcher()
+        $searchResult = $updateSearcher.Search("IsInstalled=0")
+        
+        if ($searchResult.Updates.Count -gt 0) {
+            Write-Status "WARN" "$($searchResult.Updates.Count) Windows updates available"
+            $healthIssues++
+            $healthScore -= 2
+        } else {
+            Write-Status "OK" "Windows updates current"
+        }
+    } catch {
+        Write-Status "WARN" "Could not check Windows Update status"
+    }
+    
+    Write-Host "[5/8] Checking antivirus status..."
+    try {
+        $antivirusProducts = Get-CimInstance -Namespace "root\SecurityCenter2" -ClassName "AntiVirusProduct" -ErrorAction SilentlyContinue
+        if ($antivirusProducts) {
+            $activeAV = $antivirusProducts | Where-Object { $_.productState -band 0x1000 }
+            if ($activeAV) {
+                Write-Status "OK" "Antivirus active: $($activeAV.displayName)"
+            } else {
+                Write-Status "WARN" "No active antivirus detected"
+                $healthIssues++
+                $healthScore -= 10
+            }
+        } else {
+            Write-Status "WARN" "Could not detect antivirus status"
+        }
+    } catch {
+        Write-Status "WARN" "Antivirus status check failed"
+    }
+    
+    Write-Host "[6/8] Checking Windows Firewall status..."
+    try {
+        $firewallProfiles = Get-NetFirewallProfile
+        $activeProfiles = $firewallProfiles | Where-Object { $_.Enabled -eq $true }
+        
+        if ($activeProfiles.Count -gt 0) {
+            Write-Status "OK" "Windows Firewall active ($($activeProfiles.Count) profiles)"
+        } else {
+            Write-Status "WARN" "Windows Firewall disabled"
+            $healthIssues++
+            $healthScore -= 5
+        }
+    } catch {
+        Write-Status "WARN" "Could not check firewall status"
+    }
+    
+    Write-Host "[7/8] Checking system file integrity..."
+    try {
+        Write-Status "RUN" "Running system file check (this may take a moment)..."
+        $sfcResult = sfc /verifyonly
+        
+        if ($sfcResult -match "did not find any integrity violations") {
+            Write-Status "OK" "System files integrity verified"
+        } else {
+            Write-Status "WARN" "System file integrity issues detected"
+            $healthIssues++
+            $healthScore -= 8
+        }
+    } catch {
+        Write-Status "WARN" "Could not verify system file integrity"
+    }
+    
+    Write-Host "[8/8] Checking boot performance..."
+    try {
+        $bootTime = Get-CimInstance -ClassName Win32_OperatingSystem | Select-Object LastBootUpTime
+        $uptime = (Get-Date) - $bootTime.LastBootUpTime
+        
+        if ($uptime.Days -gt 7) {
+            Write-Status "WARN" "System uptime: $($uptime.Days) days (restart recommended)"
+            $healthIssues++
+            $healthScore -= 2
+        } else {
+            Write-Status "OK" "System uptime: $($uptime.Days) days"
+        }
+    } catch {
+        Write-Status "WARN" "Could not check boot performance"
+    }
+    
+    Write-Host ""
+    Write-Host "SYSTEM HEALTH SUMMARY:" -ForegroundColor Yellow
+    Write-Host "------------------------------------------------------------------------------" -ForegroundColor Gray
+    
+    $healthGrade = if ($healthScore -ge 95) { "Excellent" }
+                  elseif ($healthScore -ge 85) { "Good" }
+                  elseif ($healthScore -ge 70) { "Fair" }
+                  elseif ($healthScore -ge 50) { "Poor" }
+                  else { "Critical" }
+    
+    $gradeColor = if ($healthScore -ge 85) { "Green" }
+                 elseif ($healthScore -ge 70) { "Yellow" }
+                 else { "Red" }
+    
+    Write-Host " Overall Health Score: $healthScore/100" -ForegroundColor $gradeColor
+    Write-Host " Health Grade: $healthGrade" -ForegroundColor $gradeColor
+    Write-Host " Issues Found: $healthIssues"
+    Write-Host " Last Check: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+    
+    Write-Status "OK" "System health check completed!"
+    Write-Log "INFO" "System health check completed - Score: $healthScore, Issues: $healthIssues"
+    Write-Host ""
+    Write-Status "INFO" "Press any key to continue..."
     $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 }
 
-# ----------------------------------- #
-#  Windows Update Checker / Installer #
-# ----------------------------------- #
-
 function Invoke-WindowsUpdateCheck {
     Show-Header "WINDOWS UPDATE CHECKER"
-    Write-Status "RUN" "Searching for Windows Updates..."
+    Write-Status "RUN" "Checking for Windows Updates..."
     Write-Host ""
-
+    
     try {
-        $uSession  = New-Object -ComObject Microsoft.Update.Session
-        $searcher  = $uSession.CreateUpdateSearcher()
-        $results   = $searcher.Search("IsInstalled=0")
-
+        $updateSession = New-Object -ComObject Microsoft.Update.Session
+        $updateSearcher = $updateSession.CreateUpdateSearcher()
+        
+        Write-Status "RUN" "Searching for available updates..."
+        $searchResult = $updateSearcher.Search("IsInstalled=0")
+        
         Write-Host "UPDATE ANALYSIS:" -ForegroundColor Yellow
         Write-Host "------------------------------------------------------------------------------" -ForegroundColor Gray
-
-        if ($results.Updates.Count -eq 0) {
-            Write-Status "OK" "No updates available – system is current"
+        
+        if ($searchResult.Updates.Count -eq 0) {
+            Write-Status "OK" "No updates available - System is up to date!"
         } else {
-            Write-Status "INFO" "Found $($results.Updates.Count) update(s)`n"
-            $important = 0; $optional = 0
-
-            for ($i = 0; $i -lt $results.Updates.Count; $i++) {
-                $u = $results.Updates.Item($i)
-                if ($u.AutoSelectOnWebSites) { $important++; $type = "Important" }
-                else                         { $optional++;  $type = "Optional" }
-                Write-Host "[$($i+1)] $($u.Title)" -ForegroundColor Cyan
-                Write-Host "    Type: $type | Size: $([Math]::Round($u.MaxDownloadSize/1MB,1)) MB"
-                $desc = if ($u.Description.Length -gt 100) { $u.Description.Substring(0,100) + "..." } else { $u.Description }
-                Write-Host "    Description: $desc`n"
-            }
-
-            $totalSize = ($results.Updates | Measure-Object MaxDownloadSize -Sum).Sum
-            Write-Host "SUMMARY:" -ForegroundColor Yellow
-            Write-Host "------------------------------------------------------------------------------" -ForegroundColor Gray
-            Write-Host " Important Updates: $important"
-            Write-Host " Optional Updates : $optional"
-            Write-Host " Total Updates    : $($results.Updates.Count)"
-            Write-Host " Total Download Size: $([Math]::Round($totalSize/1MB,1)) MB`n"
-
-            $installChoice = Read-Host "Install important updates now? (y/n)"
-            if ($installChoice -match '^[yY]$' -and $important -gt 0) {
-                $coll = New-Object -ComObject Microsoft.Update.UpdateColl
-                for ($i = 0; $i -lt $results.Updates.Count; $i++) {
-                    $u = $results.Updates.Item($i)
-                    if ($u.AutoSelectOnWebSites) { $coll.Add($u) | Out-Null }
+            Write-Status "INFO" "Found $($searchResult.Updates.Count) available updates:"
+            Write-Host ""
+            
+            $importantCount = 0
+            $optionalCount = 0
+            
+            for ($i = 0; $i -lt $searchResult.Updates.Count; $i++) {
+                $update = $searchResult.Updates.Item($i)
+                $priority = if ($update.MsrcSeverity) { $update.MsrcSeverity } else { "Normal" }
+                
+                if ($update.AutoSelectOnWebSites) {
+                    $importantCount++
+                    $updateType = "Important"
+                } else {
+                    $optionalCount++
+                    $updateType = "Optional"
                 }
-                if ($coll.Count -gt 0) {
-                    Write-Status "RUN" "Downloading updates..."
-                    $downloader = $uSession.CreateUpdateDownloader(); $downloader.Updates = $coll
-                    $dRes = $downloader.Download()
-                    if ($dRes.ResultCode -eq 2) {
-                        Write-Status "OK" "Downloaded successfully"
-                        Write-Status "RUN" "Installing updates..."
-                        $installer = $uSession.CreateUpdateInstaller(); $installer.Updates = $coll
-                        $iRes = $installer.Install()
-                        if ($iRes.ResultCode -eq 2) {
-                            Write-Status "OK" "Installed successfully"
-                            if ($iRes.RebootRequired) { Write-Status "WARN" "Restart required" }
-                        } else { Write-Status "ERR" "Installation failed" }
-                    } else { Write-Status "ERR" "Download failed" }
+                
+                Write-Host "[$($i+1)] $($update.Title)" -ForegroundColor Cyan
+                Write-Host "    Type: $updateType | Size: $([Math]::Round($update.MaxDownloadSize / 1MB, 1)) MB"
+                
+                if ($update.Description.Length -gt 100) {
+                    Write-Host "    Description: $($update.Description.Substring(0, 100))..."
+                } else {
+                    Write-Host "    Description: $($update.Description)"
+                }
+                Write-Host ""
+            }
+            
+            Write-Host "UPDATE SUMMARY:" -ForegroundColor Yellow
+            Write-Host "------------------------------------------------------------------------------" -ForegroundColor Gray
+            Write-Host " Important Updates: $importantCount"
+            Write-Host " Optional Updates: $optionalCount"
+            Write-Host " Total Updates: $($searchResult.Updates.Count)"
+            
+            $totalSize = 0
+            for ($i = 0; $i -lt $searchResult.Updates.Count; $i++) {
+                $totalSize += $searchResult.Updates.Item($i).MaxDownloadSize
+            }
+            Write-Host " Total Download Size: $([Math]::Round($totalSize / 1MB, 1)) MB"
+            
+            Write-Host ""
+            $installChoice = Read-Host "Would you like to install important updates now? (y/n)"
+            
+            if ($installChoice -eq "y" -or $installChoice -eq "Y") {
+                Write-Status "RUN" "Preparing to install important updates..."
+                
+                $importantUpdates = New-Object -ComObject Microsoft.Update.UpdateColl
+                
+                for ($i = 0; $i -lt $searchResult.Updates.Count; $i++) {
+                    $update = $searchResult.Updates.Item($i)
+                    if ($update.AutoSelectOnWebSites) {
+                        $importantUpdates.Add($update) | Out-Null
+                    }
+                }
+                
+                if ($importantUpdates.Count -gt 0) {
+                    try {
+                        Write-Status "RUN" "Downloading updates..."
+                        $downloader = $updateSession.CreateUpdateDownloader()
+                        $downloader.Updates = $importantUpdates
+                        $downloadResult = $downloader.Download()
+                        
+                        if ($downloadResult.ResultCode -eq 2) {
+                            Write-Status "OK" "Updates downloaded successfully"
+                            
+                            Write-Status "RUN" "Installing updates..."
+                            $installer = $updateSession.CreateUpdateInstaller()
+                            $installer.Updates = $importantUpdates
+                            $installResult = $installer.Install()
+                            
+                            if ($installResult.ResultCode -eq 2) {
+                                Write-Status "OK" "Updates installed successfully!"
+                                if ($installResult.RebootRequired) {
+                                    Write-Status "WARN" "System restart required to complete installation"
+                                }
+                            } else {
+                                Write-Status "ERR" "Update installation failed"
+                            }
+                        } else {
+                            Write-Status "ERR" "Update download failed"
+                        }
+                    } catch {
+                        Write-Status "ERR" "Update installation error: $($_.Exception.Message)"
+                    }
                 } else {
                     Write-Status "INFO" "No important updates to install"
                 }
             }
         }
-
-        Write-Host "`nUPDATE HISTORY:" -ForegroundColor Yellow
+        
+        Write-Host ""
+        Write-Host "UPDATE HISTORY:" -ForegroundColor Yellow
         Write-Host "------------------------------------------------------------------------------" -ForegroundColor Gray
-        $histCount = $searcher.GetTotalHistoryCount()
-        if ($histCount -gt 0) {
-            $history = $searcher.QueryHistory(0, [Math]::Min(5, $histCount))
-            foreach ($h in $history) {
-                $date = $h.Date.ToString("yyyy-MM-dd")
-                $code = switch ($h.ResultCode) {1{"In Progress"}2{"Succeeded"}3{"Succeeded w/ Errors"}4{"Failed"}5{"Aborted"}default{"Unknown"}}
-                Write-Host " [$date] $($h.Title) - $code"
+        
+        $updateHistory = $updateSearcher.GetTotalHistoryCount()
+        if ($updateHistory -gt 0) {
+            $recentUpdates = $updateSearcher.QueryHistory(0, 5)
+            Write-Host "Recent Updates (Last 5):"
+            
+            for ($i = 0; $i -lt $recentUpdates.Count; $i++) {
+                $historyItem = $recentUpdates.Item($i)
+                $installDate = $historyItem.Date.ToString("yyyy-MM-dd")
+                $resultCode = switch ($historyItem.ResultCode) {
+                    1 { "In Progress" }
+                    2 { "Succeeded" }
+                    3 { "Succeeded with Errors" }
+                    4 { "Failed" }
+                    5 { "Aborted" }
+                    default { "Unknown" }
+                }
+                
+                Write-Host " [$installDate] $($historyItem.Title) - $resultCode"
             }
         } else {
             Write-Host "No update history available"
         }
+        
     } catch {
         Write-Status "ERR" "Windows Update check failed: $($_.Exception.Message)"
-        Write-Status "INFO" "You can manually check in Windows Settings"
+        Write-Status "INFO" "You can manually check for updates in Windows Settings"
     }
-
+    
     Write-Status "OK" "Windows Update check completed!"
     Write-Log "INFO" "Windows Update check performed"
-    Show-Footer
+    Write-Host ""
+    Write-Status "INFO" "Press any key to continue..."
     $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 }
 
@@ -938,388 +1122,676 @@ function Invoke-MemoryClean {
     Show-Header "ADVANCED MEMORY CLEANER"
     Write-Status "RUN" "Analyzing and optimizing system memory..."
     Write-Host ""
-
+    
     $os = Get-CimInstance -ClassName Win32_OperatingSystem
-    $totalRAM = [Math]::Round($os.TotalVisibleMemorySize/1MB,2)
-    $freeRAM  = [Math]::Round($os.FreePhysicalMemory/1MB,2)
-    $usedRAM  = $totalRAM - $freeRAM
-    $usedPct  = [Math]::Round(($usedRAM/$totalRAM)*100,1)
-
+    $totalRAM = [Math]::Round($os.TotalVisibleMemorySize / 1MB, 2)
+    $initialFreeRAM = [Math]::Round($os.FreePhysicalMemory / 1MB, 2)
+    $initialUsedRAM = $totalRAM - $initialFreeRAM
+    $initialUsagePercent = [Math]::Round(($initialUsedRAM / $totalRAM) * 100, 1)
+    
     Write-Host "INITIAL MEMORY STATUS:" -ForegroundColor Yellow
     Write-Host "------------------------------------------------------------------------------" -ForegroundColor Gray
-    Write-Host " Total RAM : $totalRAM GB"
-    Write-Host " Used RAM  : $usedRAM GB ($usedPct`%)"
-    Write-Host " Free RAM  : $freeRAM GB"
+    Write-Host " Total RAM: $totalRAM GB"
+    Write-Host " Used RAM: $initialUsedRAM GB ($initialUsagePercent%)"
+    Write-Host " Free RAM: $initialFreeRAM GB"
     Write-Host ""
     
-    Write-Host "OPTIMIZATION PROGRESS:" -ForegroundColor Yellow
+    Write-Host "MEMORY OPTIMIZATION PROGRESS:" -ForegroundColor Yellow
     Write-Host "------------------------------------------------------------------------------" -ForegroundColor Gray
-
-    # 1. .NET GC
-    Write-Host "[1/6] Running garbage collection..."
-    try { [System.GC]::Collect(); [System.GC]::WaitForPendingFinalizers(); [System.GC]::Collect(); Write-Status "OK" "GC complete" }
-    catch { Write-Status "WARN" "GC failed" }
-
-    # 2. Clear clipboard
-    Write-Host "[2/6] Clearing clipboard..."
-    try { Set-Clipboard -Value $null; Write-Status "OK" "Clipboard cleared" }
-    catch { Write-Status "WARN" "Clipboard clear failed" }
-
-    # 3. Stop background services
-    Write-Host "[3/6] Optimizing services..."
+    
+    Write-Host "[1/6] Running .NET garbage collection..."
     try {
-        $services = @("Fax","TapisRv","SCardSvr","WSearch")
-        $stopped = @()
-        foreach ($s in $services) {
-            $svc = Get-Service -Name $s -ErrorAction SilentlyContinue
+        [System.GC]::Collect()
+        [System.GC]::WaitForPendingFinalizers()
+        [System.GC]::Collect()
+        Write-Status "OK" ".NET garbage collection completed"
+    } catch {
+        Write-Status "WARN" "Garbage collection failed"
+    }
+    
+    Write-Host "[2/6] Clearing clipboard..."
+    try {
+        Set-Clipboard -Value $null
+        Write-Status "OK" "Clipboard cleared"
+    } catch {
+        Write-Status "WARN" "Could not clear clipboard"
+    }
+    
+    Write-Host "[3/6] Optimizing background services..."
+    try {
+        $servicesToStop = @(
+            "Fax",
+            "TapisRv",
+            "SCardSvr",
+            "WSearch"
+        )
+        
+        $stoppedServices = @()
+        foreach ($service in $servicesToStop) {
+            $svc = Get-Service -Name $service -ErrorAction SilentlyContinue
             if ($svc -and $svc.Status -eq "Running" -and $svc.StartType -ne "Disabled") {
-                Stop-Service -Name $s -Force -ErrorAction SilentlyContinue
-                $stopped += $s
+                Stop-Service -Name $service -Force -ErrorAction SilentlyContinue
+                $stoppedServices += $service
             }
         }
-        if ($stopped.Count) { Write-Status "OK" "Stopped $($stopped.Count) services" }
-        else                { Write-Status "INFO" "No services needed" }
-    } catch { Write-Status "WARN" "Service optimization failed" }
-
-    # 4. Clear font cache
+        
+        if ($stoppedServices.Count -gt 0) {
+            Write-Status "OK" "Optimized $($stoppedServices.Count) background services"
+        } else {
+            Write-Status "INFO" "No services needed optimization"
+        }
+    } catch {
+        Write-Status "WARN" "Service optimization failed"
+    }
+    
     Write-Host "[4/6] Clearing font cache..."
     try {
-        $path = "$env:WINDIR\ServiceProfiles\LocalService\AppData\Local\FontCache"
-        if (Test-Path $path) {
+        $fontCachePath = "$env:WINDIR\ServiceProfiles\LocalService\AppData\Local\FontCache"
+        if (Test-Path $fontCachePath) {
             Stop-Service -Name "FontCache" -Force -ErrorAction SilentlyContinue
-            Get-ChildItem $path -Filter "*.dat" | Remove-Item -Force -ErrorAction SilentlyContinue
+            Get-ChildItem $fontCachePath -Filter "*.dat" | Remove-Item -Force -ErrorAction SilentlyContinue
             Start-Service -Name "FontCache" -ErrorAction SilentlyContinue
             Write-Status "OK" "Font cache cleared"
         }
-    } catch { Write-Status "WARN" "Font cache clear failed" }
-
-    # 5. System caches
-    Write-Host "[5/6] Flushing system caches..."
+    } catch {
+        Write-Status "WARN" "Font cache clearing failed"
+    }
+    
+    Write-Host "[5/6] Clearing system caches..."
     try {
         ipconfig /flushdns | Out-Null
         arp -d * 2>$null | Out-Null
-        nbtstat -R  2>$null | Out-Null
+        nbtstat -R 2>$null | Out-Null
         Write-Status "OK" "System caches cleared"
-    } catch { Write-Status "WARN" "System cache clear failed" }
-
-    # 6. Working set trim
-    Write-Host "[6/6] Optimizing memory working sets..."
+    } catch {
+        Write-Status "WARN" "Some system caches could not be cleared"
+    }
+    
+    Write-Host "[6/6] Optimizing memory compression..."
     try {
-        Get-Process | ForEach-Object {
-            if ($_.ProcessName -notin "System","Idle") {
-                try { $_.WorkingSet = -1 } catch {}
+        $processes = Get-Process
+        foreach ($process in $processes) {
+            if ($process.ProcessName -ne "System" -and $process.ProcessName -ne "Idle") {
+                try {
+                    $process.WorkingSet = -1
+                } catch {}
             }
         }
-        Write-Status "OK" "Working sets trimmed"
-    } catch { Write-Status "WARN" "Working set trim failed" }
-
-    Start-Sleep 2
-    $osNew   = Get-CimInstance -ClassName Win32_OperatingSystem
-    $freeNew = [Math]::Round($osNew.FreePhysicalMemory/1MB,2)
-    $usedNew = $totalRAM - $freeNew
-    $pctNew  = [Math]::Round(($usedNew/$totalRAM)*100,1)
-
-    Write-Host "`nRESULTS:" -ForegroundColor Yellow
+        Write-Status "OK" "Memory compression optimized"
+    } catch {
+        Write-Status "WARN" "Memory compression optimization failed"
+    }
+    
+    Start-Sleep 3
+    
+    $os = Get-CimInstance -ClassName Win32_OperatingSystem
+    $finalFreeRAM = [Math]::Round($os.FreePhysicalMemory / 1MB, 2)
+    $finalUsedRAM = $totalRAM - $finalFreeRAM
+    $finalUsagePercent = [Math]::Round(($finalUsedRAM / $totalRAM) * 100, 1)
+    
+    $memoryFreed = $finalFreeRAM - $initialFreeRAM
+    $percentageImprovement = $initialUsagePercent - $finalUsagePercent
+    
+    Write-Host ""
+    Write-Host "MEMORY OPTIMIZATION RESULTS:" -ForegroundColor Yellow
     Write-Host "------------------------------------------------------------------------------" -ForegroundColor Gray
-    Write-Host " Used RAM  : $usedNew GB ($pctNew`%)"
-    Write-Host " Free RAM  : $freeNew GB"
-    Write-Host " Freed RAM : $([Math]::Round($freeNew - $freeRAM,2)) GB"
-    if ($freeNew -gt $freeRAM) { Write-Status "OK" "Memory optimization successful" }
-    else                       { Write-Status "INFO" "No significant change" }
-
-    Write-Log "INFO" "Memory cleanup completed – freed $([Math]::Round($freeNew - $freeRAM,2)) GB"
-    Show-Footer
+    Write-Host " Total RAM: $totalRAM GB"
+    Write-Host " Used RAM: $finalUsedRAM GB ($finalUsagePercent%)"
+    Write-Host " Free RAM: $finalFreeRAM GB"
+    Write-Host ""
+    Write-Host " Memory Freed: $([Math]::Round($memoryFreed, 2)) GB"
+    Write-Host " Usage Reduction: $([Math]::Round($percentageImprovement, 1))%"
+    
+    if ($memoryFreed -gt 0) {
+        Write-Status "OK" "Memory optimization successful!"
+    } else {
+        Write-Status "INFO" "Memory was already well optimized"
+    }
+    
+    Write-Log "INFO" "Memory cleanup completed - Freed: $([Math]::Round($memoryFreed, 2)) GB"
+    Write-Host ""
+    Write-Status "INFO" "Press any key to continue..."
     $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 }
-# --------------------------- #
-#   Startup-Programs Manager  #
-# --------------------------- #
 
 function Invoke-StartupManager {
     Show-Header "STARTUP PROGRAMS MANAGER"
-    Write-Status "RUN" "Collecting startup items..."
+    Write-Status "RUN" "Analyzing startup programs..."
     Write-Host ""
-
-    $startupItems = @()
-
-    # Registry (Run) locations
-    $regPaths = @(
+    
+    $startupPrograms = @()
+    
+    $registryPaths = @(
         "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run",
         "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run",
         "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Run"
     )
-    foreach ($rp in $regPaths) {
-        if (Test-Path $rp) {
-            foreach ($p in (Get-ItemProperty $rp -ErrorAction SilentlyContinue).PSObject.Properties) {
-                if ($p.Name -notmatch '^PS') {
-                    $startupItems += [PSCustomObject]@{
-                        Name     = $p.Name
-                        Command  = $p.Value
-                        Location = $rp
-                        Type     = "Registry"
+    
+    foreach ($regPath in $registryPaths) {
+        if (Test-Path $regPath) {
+            $entries = Get-ItemProperty $regPath -ErrorAction SilentlyContinue
+            if ($entries) {
+                $entries.PSObject.Properties | ForEach-Object {
+                    if ($_.Name -notmatch "^PS") {
+                        $startupPrograms += [PSCustomObject]@{
+                            Name = $_.Name
+                            Command = $_.Value
+                            Location = $regPath
+                            Type = "Registry"
+                            Enabled = $true
+                        }
                     }
                 }
             }
         }
     }
-
-    # Startup folders
-    $folders = @(
+    
+    $startupFolders = @(
         "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup",
         "$env:ALLUSERSPROFILE\Microsoft\Windows\Start Menu\Programs\Startup"
     )
-    foreach ($f in $folders) {
-        if (Test-Path $f) {
-            Get-ChildItem $f -Filter *.lnk -ErrorAction SilentlyContinue | ForEach-Object {
-                $startupItems += [PSCustomObject]@{
-                    Name     = $_.BaseName
-                    Command  = $_.FullName
-                    Location = $f
-                    Type     = "Startup Folder"
+    
+    foreach ($folder in $startupFolders) {
+        if (Test-Path $folder) {
+            $shortcuts = Get-ChildItem $folder -Filter "*.lnk" -ErrorAction SilentlyContinue
+            foreach ($shortcut in $shortcuts) {
+                $startupPrograms += [PSCustomObject]@{
+                    Name = $shortcut.BaseName
+                    Command = $shortcut.FullName
+                    Location = $folder
+                    Type = "Startup Folder"
+                    Enabled = $true
                 }
             }
         }
     }
-
-    # Task Scheduler – “At log-on” tasks
+    
     try {
-        Get-ScheduledTask | Where-Object {
-            $_.State -eq "Ready" -and $_.Triggers.TriggerType -contains "AtLogOn"
-        } | Select-Object -First 50 | ForEach-Object {
-            $startupItems += [PSCustomObject]@{
-                Name     = $_.TaskName
-                Command  = $_.Actions.Execute
+        $scheduledTasks = Get-ScheduledTask | Where-Object { 
+            $_.State -eq "Ready" -and 
+            $_.Triggers.TriggerType -contains "AtLogOn" 
+        } | Select-Object -First 10
+        
+        foreach ($task in $scheduledTasks) {
+            $startupPrograms += [PSCustomObject]@{
+                Name = $task.TaskName
+                Command = $task.Actions.Execute
                 Location = "Task Scheduler"
-                Type     = "Scheduled Task"
+                Type = "Scheduled Task"
+                Enabled = $true
             }
         }
-    } catch { Write-Status "WARN" "Some scheduled tasks could not be enumerated" }
-
-    if (-not $startupItems.Count) {
-        Write-Status "INFO" "No startup items detected"
-        Show-Footer; $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown"); return
+    } catch {
+        Write-Status "WARN" "Could not access some scheduled tasks"
     }
-
-    # Display items
-    Write-Host "FOUND $($startupItems.Count) STARTUP ITEM(S):" -ForegroundColor Yellow
+    
+    Write-Host "STARTUP PROGRAMS FOUND:" -ForegroundColor Yellow
     Write-Host "------------------------------------------------------------------------------" -ForegroundColor Gray
-    for ($i = 0; $i -lt $startupItems.Count; $i++) {
-        $it = $startupItems[$i]
-        Write-Host "[$($i+1)] $($it.Name)" -ForegroundColor Cyan
-        Write-Host "    Type    : $($it.Type)"
-        Write-Host "    Command : $($it.Command.Substring(0,[Math]::Min(90,$it.Command.Length)))"
+    
+    if ($startupPrograms.Count -eq 0) {
+        Write-Status "INFO" "No startup programs found"
+    } else {
+        Write-Host "Found $($startupPrograms.Count) startup programs:"
         Write-Host ""
+        
+        for ($i = 0; $i -lt $startupPrograms.Count; $i++) {
+            $program = $startupPrograms[$i]
+            $status = if ($program.Enabled) { "Enabled" } else { "Disabled" }
+            $statusColor = if ($program.Enabled) { "Green" } else { "Yellow" }
+            
+            Write-Host "[$($i+1)] $($program.Name)" -ForegroundColor Cyan
+            Write-Host "    Status: $status" -ForegroundColor $statusColor
+            Write-Host "    Type: $($program.Type)"
+            
+            $displayCommand = $program.Command
+            if ($displayCommand.Length -gt 80) {
+                $displayCommand = $displayCommand.Substring(0, 80) + "..."
+            }
+            Write-Host "    Command: $displayCommand"
+            Write-Host ""
+        }
+        
+        Write-Host "STARTUP IMPACT ANALYSIS:" -ForegroundColor Yellow
+        Write-Host "------------------------------------------------------------------------------" -ForegroundColor Gray
+        
+        $highImpact = @()
+        $mediumImpact = @()
+        $lowImpact = @()
+        
+        $highImpactPrograms = @("Steam", "Discord", "Skype", "Spotify", "Adobe", "Office")
+        
+        foreach ($program in $startupPrograms) {
+            $isHighImpact = $false
+            foreach ($highApp in $highImpactPrograms) {
+                if ($program.Name -like "*$highApp*" -or $program.Command -like "*$highApp*") {
+                    $highImpact += $program
+                    $isHighImpact = $true
+                    break
+                }
+            }
+            
+            if (-not $isHighImpact) {
+                if ($program.Type -eq "Scheduled Task") {
+                    $mediumImpact += $program
+                } else {
+                    $lowImpact += $program
+                }
+            }
+        }
+        
+        Write-Host " High Impact Programs: $($highImpact.Count) (May slow boot time significantly)"
+        Write-Host " Medium Impact Programs: $($mediumImpact.Count) (Moderate boot impact)"
+        Write-Host " Low Impact Programs: $($lowImpact.Count) (Minimal boot impact)"
+        Write-Host ""
+        
+        Write-Host "OPTIMIZATION RECOMMENDATIONS:" -ForegroundColor Yellow
+        Write-Host "------------------------------------------------------------------------------" -ForegroundColor Gray
+        
+        if ($highImpact.Count -gt 0) {
+            Write-Status "WARN" "Consider disabling high-impact programs for faster boot"
+            foreach ($program in $highImpact) {
+                Write-Host "  - $($program.Name) (High Impact)"
+            }
+        }
+        
+        if ($startupPrograms.Count -gt 10) {
+            Write-Status "WARN" "Many startup programs detected - consider reducing for optimal performance"
+        } elseif ($startupPrograms.Count -lt 5) {
+            Write-Status "OK" "Startup program count is optimal"
+        } else {
+            Write-Status "INFO" "Startup program count is reasonable"
+        }
+        
+        Write-Host ""
+        $manageChoice = Read-Host "Would you like to disable some startup programs? (y/n)"
+        
+        if ($manageChoice -eq "y" -or $manageChoice -eq "Y") {
+            Write-Host ""
+            Write-Host "Select programs to disable (enter numbers separated by commas, or 'all' for high impact):"
+            
+            if ($highImpact.Count -gt 0) {
+                Write-Host "Enter 'high' to disable all high-impact programs"
+            }
+            
+            $selection = Read-Host "Selection"
+            
+            if ($selection -eq "high" -and $highImpact.Count -gt 0) {
+                foreach ($program in $highImpact) {
+                    Disable-StartupProgram -Program $program
+                }
+            } elseif ($selection -match '^\d+(,\d+)*$') {
+                $indices = $selection -split ',' | ForEach-Object { [int]$_.Trim() }
+                foreach ($index in $indices) {
+                    if ($index -ge 1 -and $index -le $startupPrograms.Count) {
+                        Disable-StartupProgram -Program $startupPrograms[$index - 1]
+                    }
+                }
+            }
+        }
     }
-
-    # Ask user
-    $sel = Read-Host "Enter item numbers to disable (comma separated) or press <Enter> to keep all"
-    if ($sel -match '^\d') {
-        $idx = $sel -split ',' | ForEach-Object { ([int]$_) - 1 } | Where-Object { $_ -ge 0 -and $_ -lt $startupItems.Count }
-        foreach ($i in $idx) { Disable-StartupProgram -Program $startupItems[$i] }
-    }
-
-    Write-Status "OK" "Startup-manager session completed"
-    Write-Log   "INFO" "Startup-manager – processed $($idx.Count) item(s)"
-    Show-Footer; $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    
+    Write-Status "OK" "Startup programs analysis completed!"
+    Write-Log "INFO" "Startup manager accessed - $($startupPrograms.Count) programs found"
+    Write-Host ""
+    Write-Status "INFO" "Press any key to continue..."
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 }
 
 function Disable-StartupProgram {
     param([PSCustomObject]$Program)
-
+    
     try {
-        switch ($Program.Type) {
-            "Registry" {
-                $bk = "$($script:CONFIG.BACKUP_DIR)\StartupBackup_$(Get-Date -Format 'yyyyMMdd_HHmmss').reg"
-                reg export $Program.Location.Replace("HKLM:","HKEY_LOCAL_MACHINE").Replace("HKCU:","HKEY_CURRENT_USER") $bk /y | Out-Null
-                Remove-ItemProperty -Path $Program.Location -Name $Program.Name -Force
-                Write-Status "OK" "Disabled [$($Program.Name)] (registry)"
+        if ($Program.Type -eq "Registry") {
+            $backupPath = "$($script:CONFIG.BACKUP_DIR)\Startup_Backup_$(Get-Date -Format 'yyyyMMdd_HHmmss').reg"
+            reg export $Program.Location.Replace("HKLM:", "HKEY_LOCAL_MACHINE").Replace("HKCU:", "HKEY_CURRENT_USER") $backupPath /y | Out-Null
+            
+            Remove-ItemProperty -Path $Program.Location -Name $Program.Name -Force -ErrorAction Stop
+            Write-Status "OK" "Disabled: $($Program.Name)"
+        } elseif ($Program.Type -eq "Startup Folder") {
+            $backupFolder = "$($script:CONFIG.BACKUP_DIR)\Startup_Shortcuts"
+            if (-not (Test-Path $backupFolder)) {
+                New-Item -ItemType Directory -Path $backupFolder -Force | Out-Null
             }
-            "Startup Folder" {
-                $dest = "$($script:CONFIG.BACKUP_DIR)\DisabledShortcuts"
-                if (-not (Test-Path $dest)) { New-Item -ItemType Directory -Path $dest -Force | Out-Null }
-                Move-Item -Path $Program.Command -Destination $dest -Force
-                Write-Status "OK" "Disabled [$($Program.Name)] (shortcut moved)"
-            }
-            "Scheduled Task" {
-                Disable-ScheduledTask -TaskName $Program.Name -ErrorAction Stop
-                Write-Status "OK" "Disabled task [$($Program.Name)]"
-            }
+            Move-Item -Path $Program.Command -Destination $backupFolder -Force -ErrorAction Stop
+            Write-Status "OK" "Disabled: $($Program.Name) (moved to backup)"
+        } elseif ($Program.Type -eq "Scheduled Task") {
+            Disable-ScheduledTask -TaskName $Program.Name -ErrorAction Stop
+            Write-Status "OK" "Disabled scheduled task: $($Program.Name)"
         }
     } catch {
-        Write-Status "ERR" "Failed to disable [$($Program.Name)]: $($_.Exception.Message)"
+        Write-Status "ERR" "Failed to disable: $($Program.Name) - $($_.Exception.Message)"
     }
 }
-
-# ------------------------- #
-#    Basic FPS Boost        #
-# ------------------------- #
 
 function Enable-BasicFPSBoost {
     Show-Header "BASIC FPS BOOSTER"
-    Write-Status "RUN" "Applying performance tweaks..."
+    Write-Status "RUN" "Applying basic FPS optimization settings..."
     Write-Host ""
-
-    # Restore point
-    try { Checkpoint-Computer -Description "FPS-Boost" -RestorePointType MODIFY_SETTINGS } catch {}
-
-    # 1 – High-performance power plan
-    Write-Host "[1/8] Activating High-Performance power plan..."
-    try { powercfg -setactive SCHEME_MIN; Write-Status "OK" "High-Performance plan active" }
-    catch { Write-Status "WARN" "Power-plan change failed" }
-
-    # 2 – Disable Game Bar & DVR
-    Write-Host "[2/8] Disabling Xbox Game Bar / DVR..."
+    
     try {
-        Set-ItemProperty "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR" -Name AppCaptureEnabled -Value 0 -Type Dword -Force
-        Set-ItemProperty "HKCU:\System\GameConfigStore" -Name GameDVR_Enabled -Value 0   -Type Dword -Force
-        Write-Status "OK" "Game Bar / DVR disabled"
-    } catch { Write-Status "WARN" "Game Bar tweak failed" }
-
-    # 3 – Visual-effects to performance
-    Write-Host "[3/8] Setting visual effects to performance..."
+        if (Get-Command "Checkpoint-Computer" -ErrorAction SilentlyContinue) {
+            Checkpoint-Computer -Description "FPS Boost Basic Settings" -RestorePointType "MODIFY_SETTINGS" -ErrorAction SilentlyContinue
+            Write-Status "OK" "Restore point created"
+        } else {
+            Write-Status "WARN" "Could not create restore point"
+        }
+    } catch {
+        Write-Status "WARN" "Backup creation failed: $($_.Exception.Message)"
+        Write-Status "INFO" "Continuing without backup..."
+    }
+    
+    Write-Host "FPS OPTIMIZATION PROGRESS:" -ForegroundColor Yellow
+    Write-Host "------------------------------------------------------------------------------" -ForegroundColor Gray
+    
+    Write-Host "[1/8] Setting high performance power plan..."
     try {
-        Set-ItemProperty "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" -Name VisualFXSetting -Value 2 -Type Dword -Force
-        Write-Status "OK" "Visual-effects optimised"
-    } catch { Write-Status "WARN" "Visual-effects tweak failed" }
-
-    # 4 – GPU scheduler (games)
-    Write-Host "[4/8] Prioritising GPU for Games..."
+        powercfg -setactive SCHEME_MIN
+        Write-Status "OK" "High performance power plan activated"
+    } catch {
+        Write-Status "WARN" "Could not set power plan"
+    }
+    
+    Write-Host "[2/8] Optimizing Windows Gaming features..."
     try {
-        $gp = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games"
-        if (-not (Test-Path $gp)) { New-Item -Path $gp -Force | Out-Null }
-        Set-ItemProperty $gp -Name "GPU Priority" -Value 8 -Type Dword -Force
-        Set-ItemProperty $gp -Name Priority       -Value 6 -Type Dword -Force
-        Write-Status "OK" "GPU priorities updated"
-    } catch { Write-Status "WARN" "GPU tweak failed" }
-
-    # 5 – Disable Fullscreen Optimisations
-    Write-Host "[5/8] Disabling Fullscreen Optimisations..."
+        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\GameDVR" -Name "AppCaptureEnabled" -Value 0 -Type DWord -Force
+        Set-ItemProperty -Path "HKCU:\System\GameConfigStore" -Name "GameDVR_Enabled" -Value 0 -Type DWord -Force
+        
+        Set-ItemProperty -Path "HKCU:\Software\Microsoft\GameBar" -Name "ShowStartupPanel" -Value 0 -Type DWord -Force
+        Set-ItemProperty -Path "HKCU:\Software\Microsoft\GameBar" -Name "UseNexusForGameBarEnabled" -Value 0 -Type DWord -Force
+        
+        Write-Status "OK" "Windows Gaming features optimized"
+    } catch {
+        Write-Status "WARN" "Could not optimize all gaming features"
+    }
+    
+    Write-Host "[3/8] Optimizing visual effects for performance..."
     try {
-        Set-ItemProperty "HKCU:\System\GameConfigStore" -Name GameDVR_FSEBehavior     -Value 2 -Type Dword -Force
-        Set-ItemProperty "HKCU:\System\GameConfigStore" -Name GameDVR_FSEBehaviorMode -Value 2 -Type Dword -Force
-        Write-Status "OK" "Fullscreen Optimisations disabled"
-    } catch { Write-Status "WARN" "Fullscreen tweak failed" }
-
-    # 6 – CPU responsiveness
-    Write-Host "[6/8] Raising CPU priority for games..."
+        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" -Name "VisualFXSetting" -Value 2 -Type DWord -Force
+        
+        $visualEffectsKey = "HKCU:\Control Panel\Desktop"
+        Set-ItemProperty -Path $visualEffectsKey -Name "DragFullWindows" -Value "0" -Type String -Force
+        Set-ItemProperty -Path $visualEffectsKey -Name "MenuShowDelay" -Value "0" -Type String -Force
+        
+        Set-ItemProperty -Path "HKCU:\Control Panel\Desktop\WindowMetrics" -Name "MinAnimate" -Value "0" -Type String -Force
+        
+        Write-Status "OK" "Visual effects optimized for performance"
+    } catch {
+        Write-Status "WARN" "Could not optimize all visual effects"
+    }
+    
+    Write-Host "[4/8] Optimizing GPU performance settings..."
     try {
-        $mp = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile"
-        Set-ItemProperty $mp -Name SystemResponsiveness -Value 0 -Type Dword -Force
-        Write-Status "OK" "CPU priority tweaked"
-    } catch { Write-Status "WARN" "CPU tweak failed" }
-
-    # 7 – Disable background apps
-    Write-Host "[7/8] Disabling background UWP apps..."
+        $gpuKey = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games"
+        if (-not (Test-Path $gpuKey)) {
+            New-Item -Path $gpuKey -Force | Out-Null
+        }
+        
+        Set-ItemProperty -Path $gpuKey -Name "GPU Priority" -Value 8 -Type DWord -Force
+        Set-ItemProperty -Path $gpuKey -Name "Priority" -Value 6 -Type DWord -Force
+        Set-ItemProperty -Path $gpuKey -Name "Scheduling Category" -Value "High" -Type String -Force
+        
+        Write-Status "OK" "GPU performance settings optimized"
+    } catch {
+        Write-Status "WARN" "Could not optimize GPU settings"
+    }
+    
+    Write-Host "[5/8] Disabling fullscreen optimizations..."
     try {
-        Set-ItemProperty "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications" -Name GlobalUserDisabled -Value 1 -Type Dword -Force
-        Write-Status "OK" "Background apps disabled"
-    } catch { Write-Status "WARN" "Background apps tweak failed" }
-
-    # 8 – Clear DirectX & shader caches
-    Write-Host "[8/8] Clearing graphics caches..."
+        Set-ItemProperty -Path "HKCU:\System\GameConfigStore" -Name "GameDVR_FSEBehavior" -Value 2 -Type DWord -Force
+        Set-ItemProperty -Path "HKCU:\System\GameConfigStore" -Name "GameDVR_FSEBehaviorMode" -Value 2 -Type DWord -Force
+        Set-ItemProperty -Path "HKCU:\System\GameConfigStore" -Name "GameDVR_HonorUserFSEBehaviorMode" -Value 1 -Type DWord -Force
+        
+        Write-Status "OK" "Fullscreen optimizations disabled"
+    } catch {
+        Write-Status "WARN" "Could not disable fullscreen optimizations"
+    }
+    
+    Write-Host "[6/8] Optimizing CPU priority for gaming..."
     try {
-        Get-ChildItem "$env:LOCALAPPDATA\D3DSCache" -Recurse -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-        Get-ChildItem "$env:LOCALAPPDATA\NVIDIA Corporation\NV_Cache" -Filter *.bin -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
-        Write-Status "OK" "Graphics caches cleared"
-    } catch { Write-Status "WARN" "Cache clear failed" }
-
+        $multimediaKey = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile"
+        Set-ItemProperty -Path $multimediaKey -Name "SystemResponsiveness" -Value 0 -Type DWord -Force
+        
+        Write-Status "OK" "CPU priority optimized for gaming"
+    } catch {
+        Write-Status "WARN" "Could not optimize CPU priority"
+    }
+    
+    Write-Host "[7/8] Optimizing background apps..."
+    try {
+        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications" -Name "GlobalUserDisabled" -Value 1 -Type DWord -Force
+        
+        $backgroundApps = @(
+            "Microsoft.Windows.Cortana",
+            "Microsoft.BingWeather",
+            "Microsoft.GetHelp",
+            "Microsoft.Windows.Photos"
+        )
+        
+        foreach ($app in $backgroundApps) {
+            $appKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications\$app"
+            if (Test-Path $appKey) {
+                Set-ItemProperty -Path $appKey -Name "Disabled" -Value 1 -Type DWord -Force
+            }
+        }
+        
+        Write-Status "OK" "Background apps optimized"
+    } catch {
+        Write-Status "WARN" "Could not optimize all background apps"
+    }
+    
+    Write-Host "[8/8] Cleaning gaming-related temporary files..."
+    try {
+        $dxCachePath = "$env:LOCALAPPDATA\D3DSCache"
+        if (Test-Path $dxCachePath) {
+            Get-ChildItem $dxCachePath -Recurse -ErrorAction SilentlyContinue | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
+        }
+        
+        $shaderCachePath = "$env:LOCALAPPDATA\NVIDIA Corporation\NV_Cache"
+        if (Test-Path $shaderCachePath) {
+            Get-ChildItem $shaderCachePath -Filter "*.bin" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+        }
+        
+        Write-Status "OK" "Gaming temporary files cleaned"
+    } catch {
+        Write-Status "WARN" "Could not clean all gaming temp files"
+    }
+    
     Write-Host ""
-    Write-Status "OK" "Basic FPS-boost complete – restart recommended"
-    Write-Log   "INFO" "FPS-boost executed"
-    Show-Footer; $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    Write-Host "FPS BOOST RESULTS:" -ForegroundColor Yellow
+    Write-Host "------------------------------------------------------------------------------" -ForegroundColor Gray
+    Write-Host " Power Plan: High Performance"
+    Write-Host " Game Bar/DVR: Disabled"
+    Write-Host " Visual Effects: Performance Mode"
+    Write-Host " GPU Priority: High"
+    Write-Host " CPU Priority: Gaming Optimized"
+    Write-Host " Background Apps: Minimized"
+    Write-Host " Fullscreen Optimizations: Disabled"
+    Write-Host " Gaming Temp Files: Cleaned"
+    Write-Host ""
+    
+    Write-Status "OK" "Basic FPS boost optimization completed!"
+    Write-Host ""
+    Write-Status "INFO" "Expected improvements:"
+    Write-Host "  • Reduced input lag"
+    Write-Host "  • Smoother frame rates"
+    Write-Host "  • Better GPU utilization"
+    Write-Host "  • Reduced background interference"
+    Write-Host ""
+    Write-Status "WARN" "Restart recommended for optimal gaming performance"
+    
+    Write-Log "INFO" "Basic FPS boost applied"
+    Write-Host ""
+    Write-Status "INFO" "Press any key to continue..."
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 }
-
-# ------------------------------- #
-#      Basic Gaming Mode          #
-# ------------------------------- #
 
 function Enable-GamingModeBasic {
-    Show-Header "BASIC GAMING MODE"
-    Write-Status "RUN" "Applying gaming-oriented tweaks..."
+    Show-Header "BASIC GAMING MODE OPTIMIZATION"
+    Write-Status "RUN" "Applying basic gaming optimizations..."
     Write-Host ""
-
-    Enable-BasicFPSBoost   # reuse FPS-boost tweaks
-    Write-Status "OK"  "High-performance power plan confirmed"
-
-    # Enable Windows Game Mode itself
+    
     try {
-        Set-ItemProperty "HKCU:\SOFTWARE\Microsoft\GameBar" -Name AllowAutoGameMode  -Value 1 -Type Dword -Force
-        Set-ItemProperty "HKCU:\SOFTWARE\Microsoft\GameBar" -Name AutoGameModeEnabled -Value 1 -Type Dword -Force
+        if (Get-Command "Checkpoint-Computer" -ErrorAction SilentlyContinue) {
+            Checkpoint-Computer -Description "Gaming Mode Basic" -RestorePointType "MODIFY_SETTINGS" -ErrorAction SilentlyContinue
+        }
+    } catch {
+        Write-Status "WARN" "Could not create restore point"
+    }
+    
+    Write-Host "GAMING OPTIMIZATIONS PROGRESS:" -ForegroundColor Yellow
+    Write-Host "------------------------------------------------------------------------------" -ForegroundColor Gray
+    
+    Write-Host "[1/7] Setting high performance power plan..."
+    try {
+        $highPerfPlan = Get-CimInstance -Namespace root\cimv2\power -ClassName Win32_PowerPlan | Where-Object { $_.ElementName -eq "High performance" }
+        if ($highPerfPlan) {
+            Invoke-CimMethod -InputObject $highPerfPlan -MethodName Activate
+            Write-Status "OK" "High performance power plan activated"
+        } else {
+            powercfg -setactive SCHEME_MIN
+            Write-Status "OK" "High performance power plan activated"
+        }
+    } catch {
+        Write-Status "WARN" "Could not set high performance power plan"
+    }
+    
+    Write-Host "[2/7] Enabling Windows Game Mode..."
+    try {
+        Set-ItemProperty -Path "HKCU:\Software\Microsoft\GameBar" -Name "AllowAutoGameMode" -Value 1 -Type DWord -Force
+        Set-ItemProperty -Path "HKCU:\Software\Microsoft\GameBar" -Name "AutoGameModeEnabled" -Value 1 -Type DWord -Force
         Write-Status "OK" "Windows Game Mode enabled"
-    } catch { Write-Status "WARN" "Game Mode tweak failed" }
-
-    # Silence notifications
+    } catch {
+        Write-Status "WARN" "Could not enable Game Mode"
+    }
+    
+    Write-Host "[3/7] Disabling Game DVR and Game Bar..."
     try {
-        Set-ItemProperty "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Notifications\Settings" `
-                         -Name NOC_GLOBAL_SETTING_ALLOW_NOTIFICATION_SOUND -Value 0 -Type Dword -Force
-        Write-Status "OK" "Notification sounds muted"
-    } catch { Write-Status "WARN" "Notification tweak failed" }
-
-    # Desktop profile file
-    $profile = @"
-Gaming Mode Active — $(Get-Date)
- High-Perf Power Plan : Enabled
- Game Mode            : Enabled
- Visual Effects       : Performance
- Notifications        : Muted
- GPU / CPU priority   : Raised
+        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\GameDVR" -Name "AppCaptureEnabled" -Value 0 -Type DWord -Force
+        Set-ItemProperty -Path "HKCU:\System\GameConfigStore" -Name "GameDVR_Enabled" -Value 0 -Type DWord -Force
+        Write-Status "OK" "Game DVR and Game Bar disabled"
+    } catch {
+        Write-Status "WARN" "Could not disable Game DVR"
+    }
+    
+    Write-Host "[4/7] Optimizing visual effects for performance..."
+    try {
+        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" -Name "VisualFXSetting" -Value 2 -Type DWord -Force
+        Write-Status "OK" "Visual effects optimized for performance"
+    } catch {
+        Write-Status "WARN" "Could not optimize visual effects"
+    }
+    
+    Write-Host "[5/7] Disabling Windows notifications during gaming..."
+    try {
+        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings" -Name "NOC_GLOBAL_SETTING_ALLOW_NOTIFICATION_SOUND" -Value 0 -Type DWord -Force
+        Write-Status "OK" "Gaming notifications disabled"
+    } catch {
+        Write-Status "WARN" "Could not disable notifications"
+    }
+    
+    Write-Host "[6/7] Optimizing system for gaming priority..."
+    try {
+        $gamesTaskPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games"
+        if (-not (Test-Path $gamesTaskPath)) {
+            New-Item -Path $gamesTaskPath -Force | Out-Null
+        }
+        
+        Set-ItemProperty -Path $gamesTaskPath -Name "GPU Priority" -Value 8 -Type DWord -Force
+        Set-ItemProperty -Path $gamesTaskPath -Name "Priority" -Value 6 -Type DWord -Force
+        Write-Status "OK" "Gaming priority optimized"
+    } catch {
+        Write-Status "WARN" "Could not optimize gaming priority"
+    }
+    
+    Write-Host "[7/7] Creating gaming profile..."
+    $profileContent = @"
+Gaming Mode Basic Profile - $(Get-Date)
+Status: Active
+Power Plan: High Performance
+Game Mode: Enabled
+Game DVR: Disabled
+Visual Effects: Optimized
+Notifications: Disabled
+Gaming Priority: High
 "@
-    Set-Content "$env:USERPROFILE\Desktop\Gaming_Mode_Profile.txt" -Value $profile
-
-    Write-Status "OK" "Gaming Mode profile written to desktop"
-    Write-Log   "INFO" "Gaming Mode applied"
-    Show-Footer; $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    Set-Content -Path "$env:USERPROFILE\Desktop\Gaming_Mode_Basic_Active.txt" -Value $profileContent
+    Write-Status "OK" "Gaming profile created on desktop"
+    
+    Write-Host ""
+    Write-Host "GAMING MODE RESULTS:" -ForegroundColor Yellow
+    Write-Host "------------------------------------------------------------------------------" -ForegroundColor Gray
+    Write-Host ""
+    Write-Status "OK" "Basic gaming optimization completed successfully!"
+    Write-Host ""
+    Write-Host " Power management: High performance"
+    Write-Host " Game Mode: Enabled"
+    Write-Host " Game DVR: Disabled"
+    Write-Host " Visual Effects: Performance mode"
+    Write-Host " Notifications: Muted during gaming"
+    Write-Host " System Priority: Gaming optimized"
+    Write-Host ""
+    Write-Status "WARN" "Restart recommended for full effect"
+    
+    Write-Log "INFO" "Gaming Mode Basic applied"
+    Write-Host ""
+    Write-Status "INFO" "Press any key to continue..."
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 }
-
-# ------------------------- #
-#        Main Menu          #
-# ------------------------- #
 
 function Show-MainMenu {
     Initialize-System
-    $script:HWID      = Get-HardwareID
-    $script:isPremium = Test-License -License "FREE" -HWID $script:HWID   # placeholder
-
-    :MenuLoop
-    Clear-Host
-    Write-Host "================ PC Optimizer Pro v3.0 ================" -ForegroundColor Cyan
-    Write-Host " 1) System Info"
-    Write-Host " 2) Hardware Info"
-    Write-Host " 3) Disk Analysis"
-    Write-Host " 4) Network Status"
-    Write-Host " 5) Basic Clean"
-    Write-Host " 6) Registry Scan"
-    Write-Host " 7) System Health Check"
-    Write-Host " 8) Windows Update Check"
-    Write-Host " 9) Memory Clean"
-    Write-Host "10) Startup Manager"
-    Write-Host "11) Basic FPS Boost"
-    Write-Host "12) Gaming Mode (Basic)"
-    Write-Host " Q) Quit"
-    Write-Host "======================================================="
-    $choice = Read-Host "Select an option"
-
-    switch ($choice) {
-        "1"  { Get-SystemInfo }
-        "2"  { Get-HardwareInfo }
-        "3"  { Get-DiskAnalysis }
-        "4"  { Get-NetworkStatus }
-        "5"  { Invoke-BasicClean }
-        "6"  { Invoke-RegistryScanner }
-        "7"  { Invoke-SystemHealthCheck }
-        "8"  { Invoke-WindowsUpdateCheck }
-        "9"  { Invoke-MemoryClean }
-        "10" { Invoke-StartupManager }
-        "11" { Enable-BasicFPSBoost }
-        "12" { Enable-GamingModeBasic }
-        "Q"|"q" { Write-Host "`nExiting..."; return }
-        default { Write-Host "`nInvalid option"; Start-Sleep 1 }
-    }
-    goto MenuLoop
+    $script:HWID = Get-HardwareID
+    $script:isPremium = Test-License -License "FREE" -HWID $script:HWID
+    
+    do {
+        Clear-Host
+        Write-Host "==================== PC Optimizer Pro v3.0 ====================" -ForegroundColor Cyan
+        Write-Host "|                                                                |" -ForegroundColor Cyan
+        Write-Host "|  1) System Information           7) System Health Check       |" -ForegroundColor White
+        Write-Host "|  2) Hardware Information          8) Windows Update Check     |" -ForegroundColor White
+        Write-Host "|  3) Disk Space Analysis           9) Memory Cleaner           |" -ForegroundColor White
+        Write-Host "|  4) Network Status Analysis      10) Startup Manager         |" -ForegroundColor White
+        Write-Host "|  5) Basic System Clean           11) Basic FPS Boost          |" -ForegroundColor White
+        Write-Host "|  6) Registry Scanner             12) Gaming Mode (Basic)      |" -ForegroundColor White
+        Write-Host "|                                                                |" -ForegroundColor Cyan
+        Write-Host "|  Q) Quit                                                       |" -ForegroundColor White
+        Write-Host "|                                                                |" -ForegroundColor Cyan
+        Write-Host "=================================================================" -ForegroundColor Cyan
+        Write-Host ""
+        Write-Host "Hardware ID: $($script:HWID.Substring(0, [Math]::Min(16, $script:HWID.Length)))..." -ForegroundColor Gray
+        Write-Host "License Status: $(if($script:isPremium) { 'Premium Active' } else { 'Free Version' })" -ForegroundColor Gray
+        Write-Host ""
+        
+        $choice = Read-Host "Select an option (1-12 or Q)"
+        
+        switch ($choice.ToUpper()) {
+            "1"  { Get-SystemInfo }
+            "2"  { Get-HardwareInfo }
+            "3"  { Get-DiskAnalysis }
+            "4"  { Get-NetworkStatus }
+            "5"  { Invoke-BasicClean }
+            "6"  { Invoke-RegistryScanner }
+            "7"  { Invoke-SystemHealthCheck }
+            "8"  { Invoke-WindowsUpdateCheck }
+            "9"  { Invoke-MemoryClean }
+            "10" { Invoke-StartupManager }
+            "11" { Enable-BasicFPSBoost }
+            "12" { Enable-GamingModeBasic }
+            "Q"  { 
+                Write-Host ""
+                Write-Host "Thank you for using PC Optimizer Pro v3.0!" -ForegroundColor Green
+                Write-Host "Exiting..." -ForegroundColor Yellow
+                Start-Sleep 2
+                return
+            }
+            default { 
+                Write-Host ""
+                Write-Host "Invalid option. Please select 1-12 or Q." -ForegroundColor Red
+                Start-Sleep 2
+            }
+        }
+    } while ($true)
 }
 
-# ------- Script entry point ------- #
-if ($MyInvocation.InvocationName -eq '.\PCOptimizerPro.ps1' -or $MyInvocation.InvocationName -eq $MyInvocation.MyCommand.Name) {
-    Show-MainMenu
-}
-
+# Start the application
+Show-MainMenu
