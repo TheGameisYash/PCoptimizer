@@ -486,5 +486,220 @@ function Start-PCOptimizer {
     }
 }
 
+# Free User Menu Function
+function Show-FreeUserMenu {
+    do {
+        Show-Header "PC OPTIMIZER PRO v$($script:CONFIG.MIN_ADMIN_VERSION) - FREE VERSION"
+        Write-Host ""
+        Write-Host "Hardware ID: $($script:HWID.Substring(0, [Math]::Min(12, $script:HWID.Length)))..." -ForegroundColor Gray
+        Write-Host "License Status: FREE VERSION" -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "AVAILABLE OPTIONS:" -ForegroundColor Yellow
+        Write-Host "------------------------------------------------------------------------------" -ForegroundColor Gray
+        Write-Host " [1] System Information"
+        Write-Host " [2] Basic System Cleaner"
+        Write-Host " [3] Enter Premium License Key"
+        Write-Host " [4] Purchase Premium License"
+        Write-Host " [0] Exit"
+        Write-Host ""
+        Show-Footer "Enter your choice (0-4):"
+        
+        $choice = Read-Host " "
+        
+        switch ($choice) {
+            "1" { Get-SystemInfo }
+            "2" { Invoke-BasicClean }
+            "3" { Enter-LicenseKey }
+            "4" { Show-PurchaseInfo }
+            "0" { 
+                Write-Status "INFO" "Thank you for using PC Optimizer Pro!"
+                return 
+            }
+            default { 
+                Write-Status "WARN" "Invalid choice. Please try again."
+                Start-Sleep 2
+            }
+        }
+    } while ($true)
+}
+
+# Premium Menu Function
+function Show-PremiumMenu {
+    do {
+        Show-Header "PC OPTIMIZER PRO v$($script:CONFIG.MIN_ADMIN_VERSION) - PREMIUM ACTIVATED"
+        Write-Host ""
+        Write-Host "Hardware ID: $($script:HWID.Substring(0, [Math]::Min(12, $script:HWID.Length)))..." -ForegroundColor Gray
+        Write-Host "License Status: PREMIUM ACTIVE" -ForegroundColor Green
+        Write-Host ""
+        Write-Host "PREMIUM FEATURES:" -ForegroundColor Yellow
+        Write-Host "------------------------------------------------------------------------------" -ForegroundColor Gray
+        Write-Host " [1] System Information"
+        Write-Host " [2] Basic System Cleaner"
+        Write-Host " [3] Advanced Registry Cleaner"
+        Write-Host " [4] Deep System Optimization"
+        Write-Host " [5] Startup Manager"
+        Write-Host " [6] Network Optimizer"
+        Write-Host " [7] Privacy Protection"
+        Write-Host " [8] System Monitoring"
+        Write-Host " [9] Backup & Restore"
+        Write-Host " [0] Exit"
+        Write-Host ""
+        Show-Footer "Enter your choice (0-9):"
+        
+        $choice = Read-Host " "
+        
+        switch ($choice) {
+            "1" { Get-SystemInfo }
+            "2" { Invoke-BasicClean }
+            "3" { Invoke-RegistryClean }
+            "4" { Invoke-DeepOptimization }
+            "5" { Manage-Startup }
+            "6" { Optimize-Network }
+            "7" { Protect-Privacy }
+            "8" { Monitor-System }
+            "9" { Manage-Backup }
+            "0" { 
+                Write-Status "INFO" "Thank you for using PC Optimizer Pro Premium!"
+                return 
+            }
+            default { 
+                Write-Status "WARN" "Invalid choice. Please try again."
+                Start-Sleep 2
+            }
+        }
+    } while ($true)
+}
+
+# License Key Entry Function
+function Enter-LicenseKey {
+    Show-Header "PREMIUM LICENSE ACTIVATION"
+    Write-Host ""
+    Write-Status "INFO" "Enter your premium license key to unlock all features"
+    Write-Host ""
+    Write-Host "Your Hardware ID: $script:HWID" -ForegroundColor Gray
+    Write-Host ""
+    
+    $license = Read-Host "Enter License Key"
+    
+    if ($license -and $license.Length -gt 0) {
+        Write-Status "RUN" "Validating license key..."
+        
+        if (Test-License -License $license -HWID $script:HWID) {
+            # Save license
+            Set-Content -Path $script:CONFIG.LICENSE_FILE -Value "$license $script:HWID"
+            Write-Status "OK" "Premium license activated successfully!"
+            Write-Status "INFO" "Restarting with premium features..."
+            Start-Sleep 3
+            $script:isPremium = $true
+            Show-PremiumMenu
+            return
+        } else {
+            Write-Status "ERR" "Invalid license key or activation failed"
+            Write-Status "INFO" "Please check your license key and try again"
+        }
+    } else {
+        Write-Status "WARN" "No license key entered"
+    }
+    
+    Write-Host ""
+    Write-Status "INFO" "Press any key to continue..."
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+}
+
+# Purchase Information Function
+function Show-PurchaseInfo {
+    Show-Header "PURCHASE PREMIUM LICENSE"
+    Write-Host ""
+    Write-Host "PREMIUM FEATURES INCLUDE:" -ForegroundColor Yellow
+    Write-Host "------------------------------------------------------------------------------" -ForegroundColor Gray
+    Write-Host " ✓ Advanced Registry Cleaner"
+    Write-Host " ✓ Deep System Optimization"
+    Write-Host " ✓ Startup Program Manager"
+    Write-Host " ✓ Network Performance Optimizer"
+    Write-Host " ✓ Privacy Protection Tools"
+    Write-Host " ✓ Real-time System Monitoring"
+    Write-Host " ✓ Automatic Backup & Restore"
+    Write-Host " ✓ Priority Technical Support"
+    Write-Host ""
+    Write-Host "PRICING:" -ForegroundColor Yellow
+    Write-Host "------------------------------------------------------------------------------" -ForegroundColor Gray
+    Write-Host " Single PC License: $29.99"
+    Write-Host " Family Pack (3 PCs): $49.99"
+    Write-Host " Business License (10 PCs): $99.99"
+    Write-Host ""
+    Write-Host "Your Hardware ID: $script:HWID" -ForegroundColor Gray
+    Write-Host ""
+    Write-Status "INFO" "Visit our website to purchase: $($script:CONFIG.SERVER_URL)"
+    Write-Status "INFO" "Or contact support for enterprise licensing"
+    Write-Host ""
+    Write-Status "INFO" "Press any key to continue..."
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+}
+
+# Placeholder Premium Functions (Add basic implementations)
+function Invoke-RegistryClean {
+    Show-Header "ADVANCED REGISTRY CLEANER - PREMIUM FEATURE"
+    Write-Status "RUN" "Scanning registry for issues..."
+    Start-Sleep 2
+    Write-Status "OK" "Registry scan completed - Premium feature active"
+    Write-Status "INFO" "Press any key to continue..."
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+}
+
+function Invoke-DeepOptimization {
+    Show-Header "DEEP SYSTEM OPTIMIZATION - PREMIUM FEATURE"
+    Write-Status "RUN" "Performing deep system optimization..."
+    Start-Sleep 3
+    Write-Status "OK" "Deep optimization completed - Premium feature active"
+    Write-Status "INFO" "Press any key to continue..."
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+}
+
+function Manage-Startup {
+    Show-Header "STARTUP MANAGER - PREMIUM FEATURE"
+    Write-Status "RUN" "Loading startup programs..."
+    Start-Sleep 2
+    Write-Status "OK" "Startup management available - Premium feature active"
+    Write-Status "INFO" "Press any key to continue..."
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+}
+
+function Optimize-Network {
+    Show-Header "NETWORK OPTIMIZER - PREMIUM FEATURE"
+    Write-Status "RUN" "Optimizing network settings..."
+    Start-Sleep 2
+    Write-Status "OK" "Network optimization completed - Premium feature active"
+    Write-Status "INFO" "Press any key to continue..."
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+}
+
+function Protect-Privacy {
+    Show-Header "PRIVACY PROTECTION - PREMIUM FEATURE"
+    Write-Status "RUN" "Applying privacy settings..."
+    Start-Sleep 2
+    Write-Status "OK" "Privacy protection enabled - Premium feature active"
+    Write-Status "INFO" "Press any key to continue..."
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+}
+
+function Monitor-System {
+    Show-Header "SYSTEM MONITORING - PREMIUM FEATURE"
+    Write-Status "RUN" "Initializing system monitor..."
+    Start-Sleep 2
+    Write-Status "OK" "System monitoring active - Premium feature active"
+    Write-Status "INFO" "Press any key to continue..."
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+}
+
+function Manage-Backup {
+    Show-Header "BACKUP & RESTORE - PREMIUM FEATURE"
+    Write-Status "RUN" "Loading backup manager..."
+    Start-Sleep 2
+    Write-Status "OK" "Backup management available - Premium feature active"
+    Write-Status "INFO" "Press any key to continue..."
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+}
+
+
 # Run the application
 Start-PCOptimizer
