@@ -37,6 +37,18 @@ $script:CONFIG = @{
 $script:HWID = $null
 $script:IsActivated = $false
 
+#region Helper Functions
+function Get-SafePreview {
+    param([string]$Text, [int]$Length = 8)
+    if ([string]::IsNullOrEmpty($Text)) { return "N/A" }
+    if ($Text.Length -ge $Length) { 
+        return $Text.Substring(0, $Length) + "..."
+    } else { 
+        return $Text 
+    }
+}
+#endregion
+
 #region Logging Functions
 function Write-Log {
     param([string]$Message, [string]$Level = "INFO")
@@ -84,7 +96,7 @@ function Get-HWID {
         $hash = [System.Security.Cryptography.SHA256]::Create().ComputeHash($bytes)
         $script:HWID = [System.BitConverter]::ToString($hash).Replace("-", "").Substring(0, 32)
         
-        Write-Log "Generated HWID: $($script:HWID.Substring(0,8))..." "INFO"
+        Write-Log "Generated HWID: $(Get-SafePreview -Text $script:HWID -Length 8)" "INFO"
         return $script:HWID
     } catch {
         Write-Log "Failed to generate HWID: $($_.Exception.Message)" "ERROR"
@@ -148,7 +160,8 @@ function Invoke-ApiRequest {
 function Test-LicenseValidation {
     param([string]$License)
     
-    Write-Log "Validating license: $($License.Substring(0,8))..." "INFO"
+    $licensePreview = Get-SafePreview -Text $License -Length 8
+    Write-Log "Validating license: $licensePreview" "INFO"
     $hwid = Get-HWID
     
     try {
@@ -173,7 +186,8 @@ function Test-LicenseValidation {
 function Register-NewLicense {
     param([string]$License)
     
-    Write-Log "Registering license: $($License.Substring(0,8))..." "INFO"
+    $licensePreview = Get-SafePreview -Text $License -Length 8
+    Write-Log "Registering license: $licensePreview" "INFO"
     $hwid = Get-HWID
     
     try {
@@ -309,6 +323,261 @@ function Initialize-License {
     }
     
     return $false
+}
+#endregion
+
+#region New Features
+function Show-LicenseDashboard {
+    param([string]$License)
+    
+    Write-Host "╔════════════════════════════════════════════════════════════╗" -ForegroundColor Blue
+    Write-Host "║                    LICENSE DASHBOARD                       ║" -ForegroundColor Blue
+    Write-Host "╚════════════════════════════════════════════════════════════╝" -ForegroundColor Blue
+    Write-Host ""
+    
+    # Get comprehensive license information
+    try {
+        $licenseInfo = Get-LicenseInformation -License $License
+        $hwid = Get-HWID
+        
+        # Display license details
+        Write-Host "License Key: " -NoNewline -ForegroundColor Cyan
+        Write-Host "$(Get-SafePreview -Text $License -Length 12)" -ForegroundColor White
+        
+        Write-Host "Hardware ID: " -NoNewline -ForegroundColor Cyan  
+        Write-Host "$(Get-SafePreview -Text $hwid -Length 12)" -ForegroundColor White
+        
+        if ($licenseInfo) {
+            Write-Host "Status: " -NoNewline -ForegroundColor Cyan
+            Write-Host "ACTIVE" -ForegroundColor Green
+            
+            # Display additional license info if available
+            if ($licenseInfo.expiryDate) {
+                Write-Host "Expires: " -NoNewline -ForegroundColor Cyan
+                Write-Host "$($licenseInfo.expiryDate)" -ForegroundColor White
+            }
+            
+            if ($licenseInfo.activationCount) {
+                Write-Host "Activations: " -NoNewline -ForegroundColor Cyan
+                Write-Host "$($licenseInfo.activationCount)" -ForegroundColor White
+            }
+        }
+        
+        # Test connection to server
+        Write-Host "Server Status: " -NoNewline -ForegroundColor Cyan
+        try {
+            $pingResult = Test-NetConnection -ComputerName "p-coptimizer-web.vercel.app" -Port 443 -InformationLevel Quiet
+            Write-Host (if ($pingResult) { "ONLINE" } else { "OFFLINE" }) -ForegroundColor (if ($pingResult) { "Green" } else { "Red" })
+        } catch {
+            Write-Host "UNKNOWN" -ForegroundColor Yellow
+        }
+        
+    } catch {
+        Write-Host "Error retrieving dashboard data: $($_.Exception.Message)" -ForegroundColor Red
+    }
+    
+    Write-Host ""
+}
+
+function Start-LicenseHealthCheck {
+    param([string]$License, [int]$IntervalMinutes = 30)
+    
+    Write-Log "Starting license health check (every $IntervalMinutes minutes)..." "INFO"
+    
+    while ($true) {
+        try {
+            $isValid = Test-LicenseValidation -License $License
+            
+            if ($isValid) {
+                Write-Log "License health check: PASSED" "SUCCESS"
+            } else {
+                Write-Log "License health check: FAILED - License may be revoked" "ERROR"
+                
+                # Try to get license info for more details
+                $info = Get-LicenseInformation -License $License
+                if ($info -and $info.status) {
+                    Write-Log "License status: $($info.status)" "WARN"
+                }
+            }
+            
+        } catch {
+            Write-Log "License health check error: $($_.Exception.Message)" "ERROR"
+        }
+        
+        Start-Sleep -Seconds ($IntervalMinutes * 60)
+    }
+}
+
+function Invoke-BatchLicenseCheck {
+    Write-Host "╔════════════════════════════════════════════════════════════╗" -ForegroundColor Magenta
+    Write-Host "║                  BATCH LICENSE CHECKER                     ║" -ForegroundColor Magenta
+    Write-Host "╚════════════════════════════════════════════════════════════╝" -ForegroundColor Magenta
+    Write-Host ""
+    
+    Write-Host "Enter license keys (one per line, empty line to finish):" -ForegroundColor Yellow
+    $licenses = @()
+    
+    do {
+        $license = Read-Host "License $(($licenses.Count + 1))"
+        if (![string]::IsNullOrEmpty($license)) {
+            $licenses += $license.Trim()
+        }
+    } while (![string]::IsNullOrEmpty($license))
+    
+    if ($licenses.Count -eq 0) {
+        Write-Host "No licenses provided." -ForegroundColor Red
+        return
+    }
+    
+    Write-Host "`nChecking $($licenses.Count) licenses...`n" -ForegroundColor Cyan
+    
+    foreach ($lic in $licenses) {
+        Write-Host "Checking: $(Get-SafePreview -Text $lic)... " -NoNewline -ForegroundColor White
+        
+        try {
+            $isValid = Test-LicenseValidation -License $lic
+            Write-Host (if ($isValid) { "✅ VALID" } else { "❌ INVALID" }) -ForegroundColor (if ($isValid) { "Green" } else { "Red" })
+        } catch {
+            Write-Host "❓ ERROR" -ForegroundColor Yellow
+        }
+    }
+    
+    Write-Host ""
+}
+
+function Backup-LicenseData {
+    $backupPath = Join-Path $script:CONFIG.BACKUP_DIR "license_backup_$(Get-Date -Format 'yyyyMMdd_HHmmss').json"
+    
+    try {
+        $currentLicense = Get-SavedLicense
+        if ([string]::IsNullOrEmpty($currentLicense)) {
+            Write-Log "No license to backup" "WARN"
+            return $false
+        }
+        
+        # Get license information
+        $licenseInfo = Get-LicenseInformation -License $currentLicense
+        
+        $backupData = @{
+            License = $currentLicense
+            HWID = Get-HWID
+            BackupDate = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+            LicenseInfo = $licenseInfo
+            Version = $script:CONFIG.VERSION
+        }
+        
+        # Ensure backup directory exists
+        $backupDir = Split-Path $backupPath -Parent
+        if (!(Test-Path $backupDir)) {
+            New-Item -Path $backupDir -ItemType Directory -Force | Out-Null
+        }
+        
+        $backupData | ConvertTo-Json -Depth 3 | Out-File -FilePath $backupPath -Encoding UTF8
+        Write-Log "License backup created: $backupPath" "SUCCESS"
+        return $true
+        
+    } catch {
+        Write-Log "Failed to create license backup: $($_.Exception.Message)" "ERROR"
+        return $false
+    }
+}
+
+function Restore-LicenseData {
+    $backupFiles = Get-ChildItem -Path $script:CONFIG.BACKUP_DIR -Filter "license_backup_*.json" -ErrorAction SilentlyContinue
+    
+    if ($backupFiles.Count -eq 0) {
+        Write-Host "No license backups found." -ForegroundColor Yellow
+        return
+    }
+    
+    Write-Host "Available license backups:" -ForegroundColor Cyan
+    for ($i = 0; $i -lt $backupFiles.Count; $i++) {
+        Write-Host "[$($i + 1)] $($backupFiles[$i].Name)" -ForegroundColor White
+    }
+    
+    $choice = Read-Host "Select backup to restore (1-$($backupFiles.Count))"
+    $index = [int]$choice - 1
+    
+    if ($index -ge 0 -and $index -lt $backupFiles.Count) {
+        try {
+            $backupData = Get-Content -Path $backupFiles[$index].FullName -Raw | ConvertFrom-Json
+            Save-License -License $backupData.License
+            Write-Host "License restored successfully!" -ForegroundColor Green
+        } catch {
+            Write-Host "Failed to restore license: $($_.Exception.Message)" -ForegroundColor Red
+        }
+    } else {
+        Write-Host "Invalid selection." -ForegroundColor Red
+    }
+}
+
+function Show-HWIDManager {
+    $currentLicense = Get-SavedLicense
+    if ([string]::IsNullOrEmpty($currentLicense)) {
+        Write-Host "No license found. Please activate first." -ForegroundColor Red
+        return
+    }
+    
+    Write-Host "╔════════════════════════════════════════════════════════════╗" -ForegroundColor Green
+    Write-Host "║                    HWID MANAGER                            ║" -ForegroundColor Green
+    Write-Host "╚════════════════════════════════════════════════════════════╝" -ForegroundColor Green
+    Write-Host ""
+    
+    $hwid = Get-HWID
+    Write-Host "Current Hardware ID: " -NoNewline -ForegroundColor Cyan
+    Write-Host "$hwid" -ForegroundColor White
+    Write-Host ""
+    
+    Write-Host "[1] View Full HWID" -ForegroundColor Yellow
+    Write-Host "[2] Request HWID Reset" -ForegroundColor Yellow
+    Write-Host "[3] Test HWID Validation" -ForegroundColor Yellow
+    Write-Host "[4] Export HWID Info" -ForegroundColor Yellow
+    Write-Host "[B] Back to Main Menu" -ForegroundColor Gray
+    Write-Host ""
+    
+    $choice = Read-Host "Select option"
+    
+    switch ($choice) {
+        '1' {
+            Write-Host "`nFull Hardware ID: $hwid" -ForegroundColor White
+            Write-Host "HWID Components:" -ForegroundColor Cyan
+            try {
+                $cpu = (Get-CimInstance Win32_Processor | Select-Object -First 1).ProcessorId
+                $motherboard = (Get-CimInstance Win32_BaseBoard).SerialNumber
+                $disk = (Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='C:'").VolumeSerialNumber
+                
+                Write-Host "  CPU ID: $cpu" -ForegroundColor Gray
+                Write-Host "  Motherboard: $motherboard" -ForegroundColor Gray
+                Write-Host "  Disk Serial: $disk" -ForegroundColor Gray
+            } catch {
+                Write-Host "  Error retrieving HWID components" -ForegroundColor Red
+            }
+        }
+        '2' {
+            Write-Host "`nRequesting HWID reset..." -ForegroundColor Yellow
+            $result = Request-HWIDReset -License $currentLicense
+            Write-Host (if ($result) { "✅ Reset request submitted" } else { "❌ Reset request failed" }) -ForegroundColor (if ($result) { "Green" } else { "Red" })
+        }
+        '3' {
+            Write-Host "`nTesting HWID validation..." -ForegroundColor Yellow
+            $result = Test-LicenseValidation -License $currentLicense
+            Write-Host (if ($result) { "✅ HWID validation passed" } else { "❌ HWID validation failed" }) -ForegroundColor (if ($result) { "Green" } else { "Red" })
+        }
+        '4' {
+            $exportPath = Join-Path $env:USERPROFILE "Desktop\HWID_Export_$(Get-Date -Format 'yyyyMMdd_HHmmss').txt"
+            @"
+PC Optimizer Pro - HWID Export
+Generated: $(Get-Date)
+License: $(Get-SafePreview -Text $currentLicense)
+Hardware ID: $hwid
+"@ | Out-File -FilePath $exportPath -Encoding UTF8
+            Write-Host "`nHWID info exported to: $exportPath" -ForegroundColor Green
+        }
+    }
+    
+    if ($choice -ne 'B') {
+        Read-Host "`nPress Enter to continue"
+    }
 }
 #endregion
 
@@ -467,6 +736,12 @@ function Show-Menu {
     Write-Host "[4] Registry Optimization Only" -ForegroundColor Yellow
     Write-Host "[5] Service Optimization Only" -ForegroundColor Yellow
     Write-Host "[6] Temporary File Cleanup Only" -ForegroundColor Yellow
+    Write-Host "[7] License Dashboard" -ForegroundColor Yellow
+    Write-Host "[8] Batch License Checker" -ForegroundColor Yellow
+    Write-Host "[9] HWID Manager" -ForegroundColor Yellow
+    Write-Host "[B] Backup License Data" -ForegroundColor Yellow
+    Write-Host "[R] Restore License Data" -ForegroundColor Yellow
+    Write-Host "[H] Start Health Monitor" -ForegroundColor Yellow
     Write-Host "[Q] Quit" -ForegroundColor Red
     Write-Host ""
 }
@@ -516,7 +791,9 @@ function Main {
     }
     
     Write-Host "✅ License activated successfully!" -ForegroundColor Green
-    Write-Host "Hardware ID: $((Get-HWID).Substring(0,8))..." -ForegroundColor Cyan
+    $hwid = Get-HWID
+    $hwidPreview = Get-SafePreview -Text $hwid -Length 8
+    Write-Host "Hardware ID: $hwidPreview" -ForegroundColor Cyan
     Write-Host ""
     
     # Interactive menu loop
@@ -568,6 +845,44 @@ function Main {
                 Write-Host "Starting temporary file cleanup..." -ForegroundColor Yellow
                 Invoke-TempCleanup
                 Read-Host "Press Enter to continue"
+            }
+            '7' {
+                $currentLicense = Get-SavedLicense
+                if ($currentLicense) {
+                    Show-LicenseDashboard -License $currentLicense
+                } else {
+                    Write-Host "No license found." -ForegroundColor Red
+                }
+                Read-Host "Press Enter to continue"
+            }
+            '8' {
+                Invoke-BatchLicenseCheck
+                Read-Host "Press Enter to continue"
+            }
+            '9' {
+                Show-HWIDManager
+            }
+            'B' {
+                Write-Host "Creating license backup..." -ForegroundColor Yellow
+                $result = Backup-LicenseData
+                Write-Host (if ($result) { "✅ Backup created successfully" } else { "❌ Backup failed" }) -ForegroundColor (if ($result) { "Green" } else { "Red" })
+                Read-Host "Press Enter to continue"
+            }
+            'R' {
+                Write-Host "Restoring license data..." -ForegroundColor Yellow
+                Restore-LicenseData
+                Read-Host "Press Enter to continue"
+            }
+            'H' {
+                $currentLicense = Get-SavedLicense
+                if ($currentLicense) {
+                    Write-Host "Starting license health monitor..." -ForegroundColor Yellow
+                    Write-Host "Press Ctrl+C to stop monitoring" -ForegroundColor Gray
+                    Start-LicenseHealthCheck -License $currentLicense -IntervalMinutes 5
+                } else {
+                    Write-Host "No license found." -ForegroundColor Red
+                    Read-Host "Press Enter to continue"
+                }
             }
             'Q' {
                 Write-Host "Thank you for using PC Optimizer Pro!" -ForegroundColor Green
