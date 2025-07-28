@@ -16,7 +16,7 @@ if (-NOT ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
 
 # Configuration
 $script:CONFIG = @{
-    SERVER_URL = "http://localhost:3001/"
+    SERVER_URL = "https://p-coptimizer-web.vercel.app/"
     LICENSE_FILE = "$env:ProgramData\pc_optimizer.lic"
     LOG_FILE = "$env:TEMP\optimizer_log.txt"
     BACKUP_DIR = "$env:ProgramData\PC_Optimizer_Backups"
